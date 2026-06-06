@@ -198,6 +198,7 @@ private fun MainScreen(
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                                            softWrap = true,
                         )
                     },
                     navigationIcon = {
@@ -411,6 +412,7 @@ private fun SessionCard(
                     fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                                            softWrap = true,
                 )
                 if (preview.lastMessage != null) {
                     Spacer(modifier = Modifier.height(3.dp))
@@ -420,6 +422,7 @@ private fun SessionCard(
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                                            softWrap = true,
                         lineHeight = 15.sp,
                     )
                 }
@@ -950,8 +953,9 @@ private fun SettingsDialog(
                                             connectionError,
                                             color = Color(0xFF888888),
                                             fontSize = 11.sp,
-                                            maxLines = 2,
+                                            maxLines = 4,
                                             overflow = TextOverflow.Ellipsis,
+                                            softWrap = true,
                                         )
                                     }
                                 }

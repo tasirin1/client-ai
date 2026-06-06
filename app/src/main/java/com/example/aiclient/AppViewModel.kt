@@ -231,6 +231,8 @@ class AppViewModel(
     fun updateSessionSearch(value: String) { searchQuery.value = value }
 
     // --- Test Connection ---
+    // --- Session management ---
+
     fun testConnection() {
         viewModelScope.launch {
             connectionStatus.value = ConnectionStatus.TESTING
@@ -248,24 +250,54 @@ class AppViewModel(
                 return@launch
             }
 
-            val headers = buildString {
-                append("Content-Type: application/json\n")
-                append("Authorization: Bearer ${prefs.apiKey}")
-            }
+            val provider = prefs.apiProvider
 
-            val body = buildString {
-                appendLine("{")
-                appendLine("  \"model\": \"${prefs.model}\",")
-                appendLine("  \"messages\": [")
-                appendLine("    {\"role\": \"user\", \"content\": \"Hello\"}")
-                appendLine("  ],")
-                appendLine("  \"max_tokens\": 5")
-                append("}")
+            val (url, headers, body) = when {
+                provider.equals("Google", ignoreCase = true) -> {
+                    val googleUrl = prefs.baseUrl.trimEnd('/') + "/${prefs.model}:generateContent?key=${prefs.apiKey}"
+                    val googleHeaders = "Content-Type: application/json"
+                    val googleBody = """{"contents": [{"parts": [{"text": "Hello"}]}]}"""
+                    Triple(googleUrl, googleHeaders, googleBody)
+                }
+                provider.equals("Anthropic", ignoreCase = true) -> {
+                    val anthropicHeaders = buildString {
+                        append("Content-Type: application/json\n")
+                        append("anthropic-version: 2023-06-01\n")
+                        append("x-api-key: ${prefs.apiKey}")
+                    }
+                    val anthropicBody = buildString {
+                        appendLine("{")
+                        appendLine("  \"model\": \"${prefs.model}\",")
+                        appendLine("  \"max_tokens\": 5,")
+                        appendLine("  \"messages\": [")
+                        appendLine("    {\"role\": \"user\", \"content\": \"Hello\"}")
+                        appendLine("  ]")
+                        append("}")
+                    }
+                    Triple(prefs.baseUrl, anthropicHeaders, anthropicBody)
+                }
+                else -> {
+                    // OpenAI / Deepseek / compatible
+                    val stdHeaders = buildString {
+                        append("Content-Type: application/json\n")
+                        append("Authorization: Bearer ${prefs.apiKey}")
+                    }
+                    val stdBody = buildString {
+                        appendLine("{")
+                        appendLine("  \"model\": \"${prefs.model}\",")
+                        appendLine("  \"messages\": [")
+                        appendLine("    {\"role\": \"user\", \"content\": \"Hello\"}")
+                        appendLine("  ],")
+                        appendLine("  \"max_tokens\": 5")
+                        append("}")
+                    }
+                    Triple(prefs.baseUrl, stdHeaders, stdBody)
+                }
             }
 
             runCatching {
                 apiClient.execute(
-                    url = prefs.baseUrl,
+                    url = url,
                     method = "POST",
                     headersText = headers,
                     body = body,
@@ -273,18 +305,19 @@ class AppViewModel(
             }.onSuccess { result ->
                 if (result.statusCode in 200..299) {
                     connectionStatus.value = ConnectionStatus.CONNECTED
+                    connectionError.value = ""
                 } else {
+                    val preview = result.responseBody.take(200).replace("\n", " ").trim()
                     connectionStatus.value = ConnectionStatus.FAILED
-                    connectionError.value = "HTTP ${result.statusCode}: ${result.statusMessage}"
+                    connectionError.value = "HTTP ${result.statusCode} ${result.statusMessage}\n$preview"
                 }
             }.onFailure { throwable ->
+                val msg = throwable.message ?: throwable::class.java.simpleName
                 connectionStatus.value = ConnectionStatus.FAILED
-                connectionError.value = throwable.message ?: throwable::class.java.simpleName
+                connectionError.value = msg
             }
         }
     }
-
-    // --- Session management ---
     fun createSession() {
         viewModelScope.launch {
             val session = chatRepository.createSession("Chat Baru")
