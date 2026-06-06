@@ -68,6 +68,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -105,16 +106,12 @@ class MainActivity : ComponentActivity() {
             AIClientTheme {
                 val vm: AppViewModel = viewModel(factory = AppViewModel.factory(container))
                 val uiState by vm.uiState.collectAsState()
-                val inputText = remember { mutableStateOf("") }
                 MainScreen(
                     uiState = uiState,
                     onCreateSession = vm::createSession,
                     onSelectSession = vm::updateActiveSession,
                     onDeleteSession = vm::deleteSession,
-                    onSend = { text ->
-                        vm.sendRequest(text)
-                        inputText.value = ""
-                    },
+                    onSend = { text -> vm.sendRequest(text) },
                     onSessionSearch = vm::updateSessionSearch,
                     onUpdateApiKey = vm::updateApiKey,
                     onUpdateProvider = vm::updateProvider,
@@ -237,9 +234,9 @@ private fun MainScreen(
                 )
 
                 ComposerBar(
-                    quickInput = inputText.value,
-                    onQuickInputChange = { inputText.value = it },
-                    onSend = { onSend(inputText.value) },
+                    quickInput = inputText,
+                    onQuickInputChange = { inputText = it },
+                    onSend = { onSend(inputText) },
                     isLoading = uiState.isLoading,
                 )
             }

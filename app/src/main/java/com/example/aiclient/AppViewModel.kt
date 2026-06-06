@@ -126,16 +126,20 @@ class AppViewModel(
     }
 
     private val coreUiStateFlow = combine(
-        prefsFlow, filteredSessionsFlow, messagesFlow, currentSessionIdFlow,
-        connectionStatus, connectionError,
-    ) { prefs, sessions, messages, id, connStatus, connError ->
+        combine(prefsFlow, filteredSessionsFlow, messagesFlow, currentSessionIdFlow) { prefs, sessions, messages, id ->
+            SessionState(prefs, sessions, messages, id)
+        },
+        combine(connectionStatus, connectionError) { connStatus, connError ->
+            connStatus to connError
+        }
+    ) { session, connPair ->
         CoreUiState(
-            prefs = prefs,
-            sessions = sessions,
-            messages = messages,
-            currentSessionId = id,
-            connectionStatus = connStatus,
-            connectionError = connError,
+            prefs = session.prefs,
+            sessions = session.sessions,
+            messages = session.messages,
+            currentSessionId = session.id,
+            connectionStatus = connPair.first,
+            connectionError = connPair.second,
         )
     }
 
