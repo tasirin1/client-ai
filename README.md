@@ -1,59 +1,91 @@
 # AI Client
 
-Android client generik untuk memanggil API apa saja, menyimpan sesi, dan mempertahankan memory antar sesi di device yang sama.
+Android client AI generik dengan antarmuka seperti ChatGPT. Mendukung OpenAI, Anthropic, Google Gemini, Deepseek, dan API kustom lainnya.
 
 ## Fitur
 
-- Endpoint URL bebas
-- Method `GET`, `POST`, `PUT`, `PATCH`, `DELETE`
-- Header custom
-- Template body dengan placeholder raw `{{input}}`, `{{memory}}`, `{{history}}`
-- Template body aman JSON dengan placeholder `{{input_json}}`, `{{memory_json}}`, `{{history_json}}`
-- Sesi tersimpan di Room
-- Global memory tersimpan di DataStore, jadi tetap ada setelah app ditutup lalu dibuka lagi
-- Response panel dan riwayat pesan per sesi
+### 💬 Chat seperti ChatGPT
+- Sidebar sesi dengan grup tanggal (Hari Ini / Kemarin / 7 Hari / Bulan Ini)
+- Preview pesan terakhir di setiap sesi
+- Cari sesi berdasarkan judul
+- Buat, pilih, dan hapus sesi
+
+### 🔧 Pengaturan API lengkap
+- **Provider:** OpenAI / Anthropic / Google Gemini / Deepseek / Custom
+- **API Key** (masked, bisa ditampilkan)
+- **Model** — daftar model per provider, plus input model kustom
+- **Base URL** auto-terisi sesuai provider
+- **Temperature** slider (0.0 – 2.0)
+- **Max Tokens**
+- **System Prompt**
+
+### 🔗 Multi-provider
+Setiap provider punya format request yang berbeda secara otomatis:
+
+| Provider | Auth | Endpoint |
+|----------|------|----------|
+| **OpenAI** | Bearer token | `…/v1/chat/completions` |
+| **Anthropic** | x-api-key + version header | `…/v1/messages` |
+| **Google Gemini** | API key via query param | `…/v1beta/models/{model}:generateContent` |
+| **Deepseek** | Bearer token (OpenAI-compatible) | `…/v1/chat/completions` |
+| **Custom** | Bebas (via template engine) | Sesuai konfigurasi |
+
+### 📡 Test Koneksi
+Tombol "Test" di pengaturan untuk verifikasi API bisa dijangkau:
+- ✅ Terhubung — response sukses (2xx)
+- ❌ Gagal — tampilkan HTTP code + response body
+
+### 🎨 Tampilan
+- Dark mode netral (abu-abu `#121212` + aksen hijau `#10A37F`)
+- Chat bubble dengan animasi fade-in
+- Timestamp di setiap pesan
+- Loading indicator saat mengirim
 
 ## Cara Pakai
 
-1. Buka proyek ini di Android Studio.
+1. Buka proyek ini di **Android Studio**.
 2. Tunggu sync Gradle selesai.
 3. Jalankan ke emulator atau device Android.
-4. Isi endpoint API yang mau dipanggil.
-5. Sesuaikan headers dan body template sesuai format API target.
+4. Buka **Pengaturan API** (ikon ⚙️ di kanan atas).
+5. Pilih provider, isi **API Key**, pilih **model**.
+6. Klik **Test** untuk verifikasi koneksi.
+7. Tutup pengaturan, ketik pesan, kirim.
 
-## Contoh Template
+## Build & CI
 
-```json
-{
-  "input": {{input_json}},
-  "memory": {{memory_json}},
-  "history": {{history_json}}
-}
-```
-
-Kalau API kamu butuh body mentah, gunakan placeholder raw:
-
-```text
-User: {{input}}
-Memory: {{memory}}
-History: {{history}}
-```
-
-## Catatan
-
-- Memory saat ini tersimpan lokal di device.
-- Kalau yang kamu butuhkan sinkron lintas device atau antar akun, perlu backend cloud tambahan.
-- Proyek ini sudah disiapkan sebagai fondasi untuk client REST atau client AI yang lebih besar.
-
-## Build Lokal
-
-Kalau environment sudah siap:
+### Build Lokal
 
 ```bash
 ./gradlew assembleDebug
 ```
 
-APK debug akan ada di:
+APK: `app/build/outputs/apk/debug/`
 
-`app/build/outputs/apk/debug/`
+### GitHub Actions
+
+Push ke branch `main` otomatis build dan upload APK ke artifact.
+
+## Arsitektur
+
+```
+app/src/main/java/com/example/aiclient/
+├── MainActivity.kt          # UI (Jetpack Compose)
+├── AppViewModel.kt          # State management + API logic
+├── AppContainer.kt          # Dependency injection manual
+├── AiClientApplication.kt   # Application class
+├── data/
+│   ├── AppDatabase.kt       # Room database
+│   ├── ChatDao.kt           # DAO queries
+│   ├── ChatRepository.kt    # Repository
+│   ├── Models.kt            # Entity + AppPrefs
+│   └── SettingsStore.kt     # DataStore preferences
+└── network/
+    └── GenericApiClient.kt  # OkHttp HTTP client
+```
+
+## Catatan
+
+- Sesi & memory tersimpan lokal di device (Room + DataStore).
+- Untuk sinkronisasi lintas device, perlu backend cloud tambahan.
+- Proyek ini fondasi untuk client AI yang bisa dikembangkan lebih lanjut.
 
