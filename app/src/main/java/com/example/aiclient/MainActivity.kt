@@ -332,7 +332,7 @@ private fun SessionSidebar(
         Spacer(modifier = Modifier.height(4.dp))
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             groupedSessions.forEach { (groupName, sessions) ->
@@ -378,7 +378,6 @@ private fun SessionSidebar(
         }
 
         // Settings button at bottom
-        Spacer(modifier = Modifier.weight(1f))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
