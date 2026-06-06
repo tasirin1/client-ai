@@ -30,6 +30,11 @@ Setiap provider punya format request yang berbeda secara otomatis:
 | **Deepseek** | Bearer token (OpenAI-compatible) | `…/v1/chat/completions` |
 | **Custom** | Bebas (via template engine) | Sesuai konfigurasi |
 
+### 💬 Response Cerdas
+- Response JSON API otomatis di-parse ke teks murni (tidak menampilkan JSON mentah)
+- Mendukung format OpenAI, Anthropic, Google Gemini, Deepseek
+- Riwayat chat tersimpan rapi tanpa nested JSON error
+
 ### 📡 Test Koneksi
 Tombol "Test" di pengaturan untuk verifikasi API bisa dijangkau:
 - ✅ Terhubung — response sukses (2xx)
@@ -40,6 +45,8 @@ Tombol "Test" di pengaturan untuk verifikasi API bisa dijangkau:
 - Chat bubble dengan animasi fade-in
 - Timestamp di setiap pesan
 - Loading indicator saat mengirim
+- Input stabil tanpa loncat kursor saat mengetik
+- State input lokal, tidak terpengaruh perubahan state lain
 
 ## Cara Pakai
 
