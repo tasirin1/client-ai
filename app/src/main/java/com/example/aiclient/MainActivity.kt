@@ -41,6 +41,8 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -85,6 +87,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.aiclient.data.AppPrefs
@@ -185,6 +189,7 @@ private fun MainScreen(
                         scope.launch { drawerState.close() }
                     },
                     onDeleteSession = onDeleteSession,
+                    onOpenSettings = { showSettings.value = true },
                 )
             }
         },
@@ -208,9 +213,6 @@ private fun MainScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { showSettings.value = true }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color(0xFFE0E0E0))
-                        }
                         IconButton(onClick = onCreateSession) {
                             Icon(Icons.Default.Add, contentDescription = "New Chat", tint = Color(0xFFE0E0E0))
                         }
@@ -233,6 +235,7 @@ private fun MainScreen(
                     isLoading = uiState.isLoading,
                     listState = chatListState,
                     modifier = Modifier.weight(1f),
+                    onEditMessage = { text -> inputText = text },
                 )
 
                 ComposerBar(
@@ -272,6 +275,7 @@ private fun SessionSidebar(
     onCreateSession: () -> Unit,
     onSelectSession: (String) -> Unit,
     onDeleteSession: (String) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -372,6 +376,33 @@ private fun SessionSidebar(
                 }
             }
         }
+
+        // Settings button at bottom
+        Spacer(modifier = Modifier.weight(1f))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .clickable { onOpenSettings() }
+                .background(Color(0xFF1E1E1E), RoundedCornerShape(10.dp))
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Settings,
+                    contentDescription = "Pengaturan",
+                    tint = Color(0xFF888888),
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    "Pengaturan API",
+                    color = Color(0xFFE0E0E0),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
     }
 }
 
@@ -460,6 +491,7 @@ private fun ChatArea(
     isLoading: Boolean,
     listState: LazyListState,
     modifier: Modifier = Modifier,
+    onEditMessage: ((String) -> Unit)? = null,
 ) {
     if (messages.isEmpty() && !isLoading) {
         Column(
@@ -493,7 +525,7 @@ private fun ChatArea(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(messages) { message ->
-                ChatBubble(message = message)
+                ChatBubble(message = message, onEdit = onEditMessage)
             }
             if (isLoading) {
                 item {
@@ -522,9 +554,10 @@ private fun ChatArea(
 }
 
 @Composable
-private fun ChatBubble(message: MessageEntity) {
+private fun ChatBubble(message: MessageEntity, onEdit: ((String) -> Unit)? = null) {
     val isUser = message.role == "request"
     val isError = message.role == "error"
+    val clipboardManager = LocalClipboardManager.current
 
     val backgroundColor = when {
         isError -> Color(0xFF3D1A1A)
@@ -561,12 +594,50 @@ private fun ChatBubble(message: MessageEntity) {
                         fontSize = 15.sp,
                         lineHeight = 22.sp,
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = formatMessageTime(message.timestamp),
-                        color = Color(0xFF666666),
-                        fontSize = 11.sp,
-                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = formatMessageTime(message.timestamp),
+                            color = Color(0xFF666666),
+                            fontSize = 11.sp,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (!isUser && !isError) {
+                                // Copy button for AI responses
+                                IconButton(
+                                    onClick = {
+                                        clipboardManager.setText(AnnotatedString(message.content))
+                                    },
+                                    modifier = Modifier.size(28.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.ContentCopy,
+                                        contentDescription = "Salin",
+                                        tint = Color(0xFF666666),
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            }
+                            if (isUser && !isError && onEdit != null) {
+                                // Edit button for user messages
+                                IconButton(
+                                    onClick = { onEdit(message.content) },
+                                    modifier = Modifier.size(28.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.Edit,
+                                        contentDescription = "Edit",
+                                        tint = Color(0xFF666666),
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
