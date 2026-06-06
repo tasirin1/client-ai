@@ -357,13 +357,13 @@ class AppViewModel(
                 val history = chatRepository.getMessagesOnce(session.id)
 
                 val inputForRename = input.take(28).trim()
-                val (headers, body) = buildRequest(prefs, history, input)
+                val (requestUrl, headers, body) = buildRequest(prefs, history, input)
 
-                chatRepository.addMessage(session.id, "request", body)
+                chatRepository.addMessage(session.id, "request", input)
 
                 runCatching {
                     apiClient.execute(
-                        url = prefs.baseUrl.ifBlank { prefs.endpointUrl },
+                        url = requestUrl,
                         method = "POST",
                         headersText = headers,
                         body = body,
@@ -371,7 +371,7 @@ class AppViewModel(
                 }.onSuccess { result ->
                     handleSuccess(session.id, result, inputForRename)
                 }.onFailure { throwable ->
-                    handleError(session.id, body, throwable)
+                    handleError(session.id, input.ifBlank { body }, throwable)
                 }
             } finally {
                 currentInput.value = ""
@@ -380,14 +380,33 @@ class AppViewModel(
         }
     }
 
-    private fun buildRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Pair<String, String> {
-        if (prefs.apiKey.isNotBlank()) {
-            return buildAiRequest(prefs, history, input)
+    private fun buildCustomRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Triple<String, String, String> {
+        val historyText = history.joinToString("\n\n") { "${it.role}: ${it.content}" }
+        val renderedBody = apiClient.renderTemplate(
+            template = prefs.bodyTemplate,
+            input = input,
+            memory = prefs.globalMemory,
+            history = historyText,
+            model = prefs.model,
+            temperature = prefs.temperature,
+            maxTokens = prefs.maxTokens,
+            apiKey = prefs.apiKey,
+        )
+        return Triple(prefs.baseUrl.ifBlank { prefs.endpointUrl }, prefs.defaultHeaders, renderedBody)
+    }
+    private fun buildRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Triple<String, String, String> {
+        if (prefs.apiKey.isBlank()) {
+            val (h, b) = buildCustomRequest(prefs, history, input)
+            return Triple(prefs.baseUrl.ifBlank { prefs.endpointUrl }, h, b)
         }
-        return buildCustomRequest(prefs, history, input)
+        return when (prefs.apiProvider) {
+            "Google" -> buildGoogleRequest(prefs, history, input)
+            "Anthropic" -> buildAnthropicRequest(prefs, history, input)
+            else -> buildOpenAiRequest(prefs, history, input)
+        }
     }
 
-    private fun buildAiRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Pair<String, String> {
+    private fun buildOpenAiRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Triple<String, String, String> {
         val headers = buildString {
             append("Content-Type: application/json\n")
             append("Authorization: Bearer ${prefs.apiKey}")
@@ -426,10 +445,94 @@ class AppViewModel(
             append("}")
         }
 
-        return Pair(headers, body)
+        return Triple(prefs.baseUrl, headers, body)
     }
 
-    private fun buildCustomRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Pair<String, String> {
+    private fun buildGoogleRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Triple<String, String, String> {
+        val url = prefs.baseUrl.trimEnd('/') + "/${prefs.model}:generateContent?key=${prefs.apiKey}"
+        val headers = "Content-Type: application/json"
+
+        val contents = mutableListOf<String>()
+
+        // System instruction as top-level field, not in contents
+        // Google uses system_instruction for system prompts
+
+        // History
+        for (msg in history) {
+            val role = when (msg.role) {
+                "request" -> "user"
+                "response" -> "model"
+                "error" -> "model"
+                else -> msg.role
+            }
+            contents.add("""{"role": "${role}", "parts": [{"text": ${msg.content.toJsonString()}}]}""")
+        }
+
+        // Current input
+        if (input.isNotBlank()) {
+            contents.add("""{"role": "user", "parts": [{"text": ${input.toJsonString()}}]}""")
+        }
+
+        val contentsJson = contents.joinToString(",\n")
+
+        val body = buildString {
+            appendLine("{")
+            if (prefs.globalMemory.isNotBlank()) {
+                appendLine("  \"system_instruction\": {\"parts\": [{\"text\": ${prefs.globalMemory.toJsonString()}}]},")
+            }
+            appendLine("  \"contents\": [")
+            appendLine("    $contentsJson")
+            appendLine("  ],")
+            appendLine("  \"generationConfig\": {")
+            appendLine("    \"temperature\": ${prefs.temperature},")
+            appendLine("    \"maxOutputTokens\": ${prefs.maxTokens}")
+            appendLine("  }")
+            append("}")
+        }
+
+        return Triple(url, headers, body)
+    }
+
+    private fun buildAnthropicRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Triple<String, String, String> {
+        val headers = buildString {
+            append("Content-Type: application/json\n")
+            append("x-api-key: ${prefs.apiKey}\n")
+            append("anthropic-version: 2023-06-01")
+        }
+
+        val messages = mutableListOf<String>()
+
+        for (msg in history) {
+            val role = when (msg.role) {
+                "request" -> "user"
+                "response" -> "assistant"
+                "error" -> "assistant"
+                else -> msg.role
+            }
+            messages.add("""{"role": "${role}", "content": ${msg.content.toJsonString()}}""")
+        }
+
+        if (input.isNotBlank()) {
+            messages.add("""{"role": "user", "content": ${input.toJsonString()}}""")
+        }
+
+        val messagesJson = messages.joinToString(",\n")
+
+        val body = buildString {
+            appendLine("{")
+            appendLine("  \"model\": \"${prefs.model}\",")
+            appendLine("  \"max_tokens\": ${prefs.maxTokens},")
+            if (prefs.globalMemory.isNotBlank()) {
+                appendLine("  \"system\": ${prefs.globalMemory.toJsonString()},")
+            }
+            appendLine("  \"messages\": [")
+            appendLine("    $messagesJson")
+            appendLine("  ]")
+            append("}")
+        }
+
+        return Triple(prefs.baseUrl, headers, body)
+    }
         val historyText = history.joinToString("\n\n") { "${it.role}: ${it.content}" }
         val renderedBody = apiClient.renderTemplate(
             template = prefs.bodyTemplate,
