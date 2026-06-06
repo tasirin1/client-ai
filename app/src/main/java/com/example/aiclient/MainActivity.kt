@@ -86,6 +86,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.aiclient.data.AppPrefs
+import com.example.aiclient.ConnectionStatus
 import com.example.aiclient.data.MessageEntity
 import com.example.aiclient.data.SessionEntity
 import com.example.aiclient.ui.AIClientTheme
@@ -119,6 +120,9 @@ class MainActivity : ComponentActivity() {
                     onUpdateTemperature = vm::updateTemperature,
                     onUpdateMaxTokens = vm::updateMaxTokens,
                     onUpdateGlobalMemory = vm::updateGlobalMemory,
+                    onTestConnection = vm::testConnection,
+                    connectionStatus = uiState.connectionStatus,
+                    connectionError = uiState.connectionError,
                 )
             }
         }
@@ -142,6 +146,9 @@ private fun MainScreen(
     onUpdateTemperature: (Float) -> Unit,
     onUpdateMaxTokens: (Int) -> Unit,
     onUpdateGlobalMemory: (String) -> Unit,
+    onTestConnection: () -> Unit,
+    connectionStatus: ConnectionStatus,
+    connectionError: String,
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -246,6 +253,9 @@ private fun MainScreen(
             onUpdateTemperature = onUpdateTemperature,
             onUpdateMaxTokens = onUpdateMaxTokens,
             onUpdateGlobalMemory = onUpdateGlobalMemory,
+            onTestConnection = onTestConnection,
+            connectionStatus = connectionStatus,
+            connectionError = connectionError,
             onDismiss = { showSettings.value = false },
         )
     }
@@ -629,7 +639,9 @@ private fun SettingsDialog(
     onUpdateTemperature: (Float) -> Unit,
     onUpdateMaxTokens: (Int) -> Unit,
     onUpdateGlobalMemory: (String) -> Unit,
-    onDismiss: () -> Unit,
+    onTestConnection: () -> Unit,
+    connectionStatus: ConnectionStatus,
+    connectionError: String,
 ) {
     val providers = listOf("OpenAI", "Anthropic", "Google", "Deepseek", "Custom")
     val modelsByProvider = mapOf(
@@ -866,6 +878,95 @@ private fun SettingsDialog(
                     shape = RoundedCornerShape(8.dp),
                 )
 
+
+                // Test Connection
+                Text("Test Koneksi", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        when (connectionStatus) {
+                            ConnectionStatus.IDLE -> {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = Color(0xFF666666),
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    "Belum dicek",
+                                    color = Color(0xFF666666),
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            ConnectionStatus.TESTING -> {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    color = Color(0xFF10A37F),
+                                    strokeWidth = 2.dp,
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    "Mengetes...",
+                                    color = Color(0xFF888888),
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            ConnectionStatus.CONNECTED -> {
+                                Text("\u2705", fontSize = 18.sp)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Terhubung",
+                                        color = Color(0xFF10A37F),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                            }
+                            ConnectionStatus.FAILED -> {
+                                Text("\u274C", fontSize = 18.sp)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Gagal",
+                                        color = Color(0xFFEF9A9A),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    if (connectionError.isNotBlank()) {
+                                        Text(
+                                            connectionError,
+                                            color = Color(0xFF888888),
+                                            fontSize = 11.sp,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = onTestConnection,
+                            enabled = connectionStatus != ConnectionStatus.TESTING,
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color(0xFF10A37F),
+                            ),
+                        ) {
+                            Text("Test", fontSize = 12.sp)
+                        }
+                    }
+                }
                 // System Prompt
                 Text("System Prompt", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 OutlinedTextField(

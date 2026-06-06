@@ -20,6 +20,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+enum class ConnectionStatus {
+    IDLE, TESTING, CONNECTED, FAILED
+}
+
 data class SessionPreview(
     val session: SessionEntity,
     val lastMessage: String? = null,
@@ -39,6 +43,8 @@ data class UiState(
     val errorMessage: String = "",
     val currentInput: String = "",
     val sessionSearchQuery: String = "",
+    val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
+    val connectionError: String = "",
 )
 
 private data class CoreUiState(
@@ -47,6 +53,8 @@ private data class CoreUiState(
     val messages: List<MessageEntity>,
     val currentSessionId: String,
     val currentInput: String,
+    val connectionStatus: ConnectionStatus,
+    val connectionError: String,
 )
 
 private data class NetworkUiState(
@@ -68,8 +76,9 @@ class AppViewModel(
     private val responseBody = MutableStateFlow("")
     private val errorMessage = MutableStateFlow("")
     private val searchQuery = MutableStateFlow("")
-    // Local input state — no DataStore writes on every keystroke
     private val currentInput = MutableStateFlow("")
+    private val connectionStatus = MutableStateFlow(ConnectionStatus.IDLE)
+    private val connectionError = MutableStateFlow("")
 
     private val prefsFlow = settingsStore.prefsFlow
     private val sessionsFlow = chatRepository.observeSessions()
@@ -115,13 +124,17 @@ class AppViewModel(
         messagesFlow,
         currentSessionIdFlow,
         currentInput,
-    ) { prefs, sessions, messages, currentSessionId, input ->
+        connectionStatus,
+        connectionError,
+    ) { prefs, sessions, messages, currentSessionId, input, connStatus, connError ->
         CoreUiState(
             prefs = prefs,
             sessions = sessions,
             messages = messages,
             currentSessionId = currentSessionId,
             currentInput = input,
+            connectionStatus = connStatus,
+            connectionError = connError,
         )
     }
 
@@ -158,6 +171,8 @@ class AppViewModel(
             errorMessage = network.errorMessage,
             currentInput = core.currentInput,
             sessionSearchQuery = searchQuery.value,
+            connectionStatus = core.connectionStatus,
+            connectionError = core.connectionError,
         )
     }.stateIn(
         viewModelScope,
@@ -203,6 +218,61 @@ class AppViewModel(
     fun updateActiveSession(sessionId: String) = persistPrefs { it.copy(activeSessionId = sessionId) }
     fun updateSessionSearch(value: String) { searchQuery.value = value }
 
+    // --- Test Connection ---
+    fun testConnection() {
+        viewModelScope.launch {
+            connectionStatus.value = ConnectionStatus.TESTING
+            connectionError.value = ""
+
+            val prefs = uiState.value.prefs
+            if (prefs.apiKey.isBlank()) {
+                connectionStatus.value = ConnectionStatus.FAILED
+                connectionError.value = "API Key belum diisi"
+                return@launch
+            }
+            if (prefs.baseUrl.isBlank()) {
+                connectionStatus.value = ConnectionStatus.FAILED
+                connectionError.value = "Base URL belum diisi"
+                return@launch
+            }
+
+            val headers = buildString {
+                append("Content-Type: application/json\n")
+                append("Authorization: Bearer ${prefs.apiKey}")
+            }
+
+            val body = buildString {
+                appendLine("{")
+                appendLine("  \"model\": \"${prefs.model}\",")
+                appendLine("  \"messages\": [")
+                appendLine("    {\"role\": \"user\", \"content\": \"Hello\"}")
+                appendLine("  ],")
+                appendLine("  \"max_tokens\": 5")
+                append("}")
+            }
+
+            runCatching {
+                apiClient.execute(
+                    url = prefs.baseUrl,
+                    method = "POST",
+                    headersText = headers,
+                    body = body,
+                )
+            }.onSuccess { result ->
+                if (result.statusCode in 200..299) {
+                    connectionStatus.value = ConnectionStatus.CONNECTED
+                } else {
+                    connectionStatus.value = ConnectionStatus.FAILED
+                    connectionError.value = "HTTP ${result.statusCode}: ${result.statusMessage}"
+                }
+            }.onFailure { throwable ->
+                connectionStatus.value = ConnectionStatus.FAILED
+                connectionError.value = throwable.message ?: throwable::class.java.simpleName
+            }
+        }
+    }
+
+    // --- Session management ---
     fun createSession() {
         viewModelScope.launch {
             val session = chatRepository.createSession("Chat Baru")
@@ -226,6 +296,7 @@ class AppViewModel(
         }
     }
 
+    // --- Send Request ---
     fun sendRequest() {
         viewModelScope.launch {
             loading.value = true
@@ -240,9 +311,7 @@ class AppViewModel(
                 val session = ensureCurrentSession(prefs)
                 val history = chatRepository.getMessagesOnce(session.id)
 
-                // Save input for rename
                 val inputForRename = input.take(28).trim()
-
                 val (headers, body) = buildRequest(prefs, history, input)
 
                 chatRepository.addMessage(session.id, "request", body)
