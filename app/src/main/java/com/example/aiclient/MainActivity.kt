@@ -149,10 +149,9 @@ private fun MainScreen(
     onTestConnection: () -> Unit,
     connectionStatus: ConnectionStatus,
     connectionError: String,
-    onDismiss: () -> Unit,
 ) {
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val showSettings = rememberSaveable { mutableStateOf(false) }
     val chatListState = rememberLazyListState()
 
     // Auto-scroll when new messages arrive
