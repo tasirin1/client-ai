@@ -84,6 +84,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.aiclient.data.AppPrefs
@@ -579,6 +580,7 @@ private fun ComposerBar(
     onSend: (String) -> Unit,
     isLoading: Boolean,
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
@@ -606,12 +608,20 @@ private fun ComposerBar(
                     unfocusedContainerColor = Color(0xFF121212),
                 ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { if (!isLoading && quickInput.isNotBlank()) onSend(quickInput) }),
+                keyboardActions = KeyboardActions(onSend = {
+                    if (!isLoading && quickInput.isNotBlank()) {
+                        keyboardController?.hide()
+                        onSend(quickInput)
+                    }
+                }),
                 shape = RoundedCornerShape(12.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
             Button(
-                onClick = { onSend(quickInput) },
+                onClick = {
+                    keyboardController?.hide()
+                    onSend(quickInput)
+                },
                 enabled = !isLoading && quickInput.isNotBlank(),
                 shape = CircleShape,
                 colors = ButtonDefaults.buttonColors(
