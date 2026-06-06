@@ -38,4 +38,5 @@ data class MessageEntity(
     val role: String,
     val content: String,
     val createdAt: Long,
+    val timestamp: Long = createdAt,
 )

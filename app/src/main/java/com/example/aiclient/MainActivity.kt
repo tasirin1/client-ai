@@ -56,6 +56,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.aiclient.data.MessageEntity
 import com.example.aiclient.data.SessionEntity
 import com.example.aiclient.ui.AIClientTheme
+import java.text.SimpleDateFormat
+import java.util.Locale
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -101,6 +104,7 @@ private fun AppScreen(
 
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
+            delay(80)
             chatListState.animateScrollToItem(uiState.messages.lastIndex)
         }
     }
@@ -351,6 +355,11 @@ private fun ChatBubble(
                     text = message.content,
                     color = textColor,
                 )
+                Text(
+                    text = formatTimestamp(message.timestamp),
+                    color = Color(0xFF9FB4C7),
+                    style = MaterialTheme.typography.labelSmall,
+                )
             }
         }
     }
@@ -484,4 +493,8 @@ private fun MethodSelector(
             )
         }
     }
+}
+
+private fun formatTimestamp(timestamp: Long): String {
+    return SimpleDateFormat("HH:mm", Locale.getDefault()).format(timestamp)
 }

@@ -66,6 +66,7 @@ class ChatRepository(
                 role = role,
                 content = content,
                 createdAt = now,
+                timestamp = now,
             ),
         )
     }
