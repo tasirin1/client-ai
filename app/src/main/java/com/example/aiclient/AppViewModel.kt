@@ -65,6 +65,19 @@ private data class NetworkUiState(
     val errorMessage: String,
 )
 
+private data class SessionState(
+    val prefs: AppPrefs,
+    val sessions: List<SessionPreview>,
+    val messages: List<MessageEntity>,
+    val id: String,
+)
+
+private data class InputState(
+    val input: String,
+    val connStatus: ConnectionStatus,
+    val connError: String,
+)
+
 class AppViewModel(
     private val settingsStore: SettingsStore,
     private val chatRepository: ChatRepository,
@@ -119,22 +132,21 @@ class AppViewModel(
     }
 
     private val coreUiStateFlow = combine(
-        prefsFlow,
-        filteredSessionsFlow,
-        messagesFlow,
-        currentSessionIdFlow,
-        currentInput,
-        connectionStatus,
-        connectionError,
-    ) { prefs, sessions, messages, currentSessionId, input, connStatus, connError ->
+        combine(prefsFlow, filteredSessionsFlow, messagesFlow, currentSessionIdFlow) { prefs, sessions, messages, id ->
+            SessionState(prefs, sessions, messages, id)
+        },
+        combine(currentInput, connectionStatus, connectionError) { input, connStatus, connError ->
+            InputState(input, connStatus, connError)
+        }
+    ) { session, input ->
         CoreUiState(
-            prefs = prefs,
-            sessions = sessions,
-            messages = messages,
-            currentSessionId = currentSessionId,
-            currentInput = input,
-            connectionStatus = connStatus,
-            connectionError = connError,
+            prefs = session.prefs,
+            sessions = session.sessions,
+            messages = session.messages,
+            currentSessionId = session.id,
+            currentInput = input.input,
+            connectionStatus = input.connStatus,
+            connectionError = input.connError,
         )
     }
 

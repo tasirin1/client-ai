@@ -149,8 +149,8 @@ private fun MainScreen(
     onTestConnection: () -> Unit,
     connectionStatus: ConnectionStatus,
     connectionError: String,
+    onDismiss: () -> Unit,
 ) {
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val showSettings = rememberSaveable { mutableStateOf(false) }
     val chatListState = rememberLazyListState()
@@ -642,6 +642,7 @@ private fun SettingsDialog(
     onTestConnection: () -> Unit,
     connectionStatus: ConnectionStatus,
     connectionError: String,
+    onDismiss: () -> Unit,
 ) {
     val providers = listOf("OpenAI", "Anthropic", "Google", "Deepseek", "Custom")
     val modelsByProvider = mapOf(
