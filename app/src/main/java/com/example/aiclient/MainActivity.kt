@@ -344,7 +344,6 @@ private fun ChatBubble(
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart,
     ) {
         AnimatedVisibility(
             visible = true,
@@ -355,6 +354,7 @@ private fun ChatBubble(
                 ),
         ) {
             Card(
+                modifier = Modifier.align(if (isUser) Alignment.End else Alignment.Start),
                 colors = CardDefaults.cardColors(containerColor = containerColor),
                 shape = RoundedCornerShape(22.dp),
             ) {
