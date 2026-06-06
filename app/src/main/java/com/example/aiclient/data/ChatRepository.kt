@@ -72,4 +72,9 @@ class ChatRepository(
     }
 
     suspend fun getMessagesOnce(sessionId: String): List<MessageEntity> = chatDao.getMessagesOnce(sessionId)
+
+    suspend fun deleteSession(sessionId: String) {
+        chatDao.deleteMessagesBySession(sessionId)
+        chatDao.deleteSession(sessionId)
+    }
 }

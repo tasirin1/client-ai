@@ -14,6 +14,24 @@ data class ApiResult(
     val responseBody: String,
 )
 
+fun String.toJsonString(): String {
+    val escaped = buildString(length + 2) {
+        append('"')
+        for (char in this@toJsonString) {
+            when (char) {
+                '\\' -> append("\\\\")
+                '"' -> append("\\\"")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> append(char)
+            }
+        }
+        append('"')
+    }
+    return escaped
+}
+
 class GenericApiClient(
     private val client: OkHttpClient = OkHttpClient(),
 ) {
@@ -22,6 +40,10 @@ class GenericApiClient(
         input: String,
         memory: String,
         history: String,
+        model: String = "",
+        temperature: Float = 0.7f,
+        maxTokens: Int = 4096,
+        apiKey: String = "",
     ): String {
         val inputJson = input.toJsonString()
         val memoryJson = memory.toJsonString()
@@ -33,6 +55,12 @@ class GenericApiClient(
             .replace("{{memory_json}}", memoryJson)
             .replace("{{history}}", history)
             .replace("{{history_json}}", historyJson)
+            .replace("{{model}}", model)
+            .replace("{{temperature}}", temperature.toString())
+            .replace("{{max_tokens}}", maxTokens.toString())
+            .replace("{{system_prompt}}", memory)
+            .replace("{{system_prompt_json}}", memoryJson)
+            .replace("{{api_key}}", apiKey)
     }
 
     suspend fun execute(
@@ -81,23 +109,5 @@ class GenericApiClient(
                 }
         }
         return builder.build()
-    }
-
-    private fun String.toJsonString(): String {
-        val escaped = buildString(length + 2) {
-            append('"')
-            for (char in this@toJsonString) {
-                when (char) {
-                    '\\' -> append("\\\\")
-                    '"' -> append("\\\"")
-                    '\n' -> append("\\n")
-                    '\r' -> append("\\r")
-                    '\t' -> append("\\t")
-                    else -> append(char)
-                }
-            }
-            append('"')
-        }
-        return escaped
     }
 }

@@ -10,6 +10,7 @@ import com.example.aiclient.data.SessionEntity
 import com.example.aiclient.data.SettingsStore
 import com.example.aiclient.network.ApiResult
 import com.example.aiclient.network.GenericApiClient
+import com.example.aiclient.network.toJsonString
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -135,11 +136,20 @@ class AppViewModel(
             ?.let { chatRepository.getSessionOnce(it) }
         val session = activeSession ?: run {
             val existing = chatRepository.observeSessions().first().firstOrNull()
-            existing ?: chatRepository.createSession("Sesi 1")
+            existing ?: chatRepository.createSession("Chat Baru")
         }
         settingsStore.update { it.copy(activeSessionId = session.id) }
     }
 
+    // --- AI Chat settings ---
+    fun updateApiKey(value: String) = persistPrefs { it.copy(apiKey = value) }
+    fun updateProvider(value: String) = persistPrefs { it.copy(apiProvider = value) }
+    fun updateModel(value: String) = persistPrefs { it.copy(model = value) }
+    fun updateBaseUrl(value: String) = persistPrefs { it.copy(baseUrl = value) }
+    fun updateTemperature(value: Float) = persistPrefs { it.copy(temperature = value) }
+    fun updateMaxTokens(value: Int) = persistPrefs { it.copy(maxTokens = value) }
+
+    // --- Legacy settings ---
     fun updateEndpointUrl(value: String) = persistPrefs { it.copy(endpointUrl = value) }
     fun updateMethod(value: String) = persistPrefs { it.copy(method = value) }
     fun updateHeaders(value: String) = persistPrefs { it.copy(defaultHeaders = value) }
@@ -150,8 +160,24 @@ class AppViewModel(
 
     fun createSession() {
         viewModelScope.launch {
-            val session = chatRepository.createSession("Sesi ${uiState.value.sessions.size + 1}")
+            val session = chatRepository.createSession("Chat Baru")
             updateActiveSession(session.id)
+        }
+    }
+
+    fun deleteSession(sessionId: String) {
+        viewModelScope.launch {
+            val currentId = uiState.value.currentSessionId
+            chatRepository.deleteSession(sessionId)
+            if (sessionId == currentId) {
+                val sessions = chatRepository.observeSessions().first()
+                val nextSession = sessions.firstOrNull()
+                if (nextSession != null) {
+                    updateActiveSession(nextSession.id)
+                } else {
+                    createSession()
+                }
+            }
         }
     }
 
@@ -167,27 +193,22 @@ class AppViewModel(
                 val prefs = uiState.value.prefs
                 val session = ensureCurrentSession(prefs)
                 val history = chatRepository.getMessagesOnce(session.id)
-                    .joinToString("\n\n") { "${it.role}: ${it.content}" }
-                val renderedBody = apiClient.renderTemplate(
-                    template = prefs.bodyTemplate,
-                    input = prefs.quickInput,
-                    memory = prefs.globalMemory,
-                    history = history,
-                )
 
-                chatRepository.addMessage(session.id, "request", renderedBody)
+                val (headers, body) = buildRequest(prefs, history)
+
+                chatRepository.addMessage(session.id, "request", body)
 
                 runCatching {
                     apiClient.execute(
-                        url = prefs.endpointUrl,
-                        method = prefs.method,
-                        headersText = prefs.defaultHeaders,
-                        body = renderedBody,
+                        url = prefs.baseUrl.ifBlank { prefs.endpointUrl },
+                        method = "POST",
+                        headersText = headers,
+                        body = body,
                     )
                 }.onSuccess { result ->
                     handleSuccess(session.id, result)
                 }.onFailure { throwable ->
-                    handleError(session.id, renderedBody, throwable)
+                    handleError(session.id, body, throwable)
                 }
             } finally {
                 loading.value = false
@@ -195,11 +216,83 @@ class AppViewModel(
         }
     }
 
+    private fun buildRequest(prefs: AppPrefs, history: List<MessageEntity>): Pair<String, String> {
+        val isAiProvider = prefs.apiProvider.equals("OpenAI", ignoreCase = true) ||
+                prefs.apiProvider.equals("Anthropic", ignoreCase = true) ||
+                prefs.apiProvider.equals("Google", ignoreCase = true)
+
+        return if (isAiProvider && prefs.apiKey.isNotBlank()) {
+            buildAiRequest(prefs, history)
+        } else {
+            buildCustomRequest(prefs, history)
+        }
+    }
+
+    private fun buildAiRequest(prefs: AppPrefs, history: List<MessageEntity>): Pair<String, String> {
+        val headers = buildString {
+            append("Content-Type: application/json\n")
+            append("Authorization: Bearer ${prefs.apiKey}")
+        }
+
+        val messages = mutableListOf<String>()
+
+        // System prompt
+        if (prefs.globalMemory.isNotBlank()) {
+            messages.add("""{"role": "system", "content": ${prefs.globalMemory.toJsonString()}}""")
+        }
+
+        // History messages
+        for (msg in history) {
+            val role = when (msg.role) {
+                "request" -> "user"
+                "response" -> "assistant"
+                "error" -> "assistant"
+                else -> msg.role
+            }
+            messages.add("""{"role": "${role}", "content": ${msg.content.toJsonString()}}""")
+        }
+
+        // Current user input
+        if (prefs.quickInput.isNotBlank()) {
+            messages.add("""{"role": "user", "content": ${prefs.quickInput.toJsonString()}}""")
+        }
+
+        val messagesJson = messages.joinToString(",\n")
+
+        val body = buildString {
+            appendLine("{")
+            appendLine("  \"model\": \"${prefs.model}\",")
+            appendLine("  \"messages\": [")
+            appendLine("    $messagesJson")
+            appendLine("  ],")
+            appendLine("  \"temperature\": ${prefs.temperature},")
+            appendLine("  \"max_tokens\": ${prefs.maxTokens}")
+            append("}")
+        }
+
+        return Pair(headers, body)
+    }
+
+    private fun buildCustomRequest(prefs: AppPrefs, history: List<MessageEntity>): Pair<String, String> {
+        val historyText = history.joinToString("\n\n") { "${it.role}: ${it.content}" }
+        val renderedBody = apiClient.renderTemplate(
+            template = prefs.bodyTemplate,
+            input = prefs.quickInput,
+            memory = prefs.globalMemory,
+            history = historyText,
+            model = prefs.model,
+            temperature = prefs.temperature,
+            maxTokens = prefs.maxTokens,
+            apiKey = prefs.apiKey,
+        )
+        return Pair(prefs.defaultHeaders, renderedBody)
+    }
+
     private suspend fun ensureCurrentSession(prefs: AppPrefs): SessionEntity {
         val activeId = prefs.activeSessionId
         val existing = activeId.takeIf { it.isNotBlank() }?.let { chatRepository.getSessionOnce(it) }
         return existing ?: run {
-            val session = chatRepository.createSession("Sesi ${uiState.value.sessions.size + 1}")
+            val session = chatRepository.createSession("Chat Baru")
             settingsStore.update { it.copy(activeSessionId = session.id) }
             session
         }
@@ -211,14 +304,16 @@ class AppViewModel(
         responseBody.value = result.responseBody
         chatRepository.addMessage(sessionId, "response", result.responseBody)
         val currentSession = chatRepository.getSessionOnce(sessionId)
-        val shouldAutoRename = currentSession?.title?.startsWith("Sesi ") != false
+        val shouldAutoRename = currentSession?.title?.startsWith("Chat") != false || currentSession?.title?.startsWith("Sesi") != false
         if (shouldAutoRename) {
             val newTitle = uiState.value.prefs.quickInput
-                .take(24)
+                .take(28)
                 .trim()
-                .ifBlank { "Sesi ${sessionId.take(4)}" }
+                .ifBlank { "Chat ${sessionId.take(4)}" }
             chatRepository.renameSession(sessionId, newTitle)
         }
+        // Clear quick input after sending
+        settingsStore.update { it.copy(quickInput = "") }
     }
 
     private suspend fun handleError(sessionId: String, renderedBody: String, throwable: Throwable) {
