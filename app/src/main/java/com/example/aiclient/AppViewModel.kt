@@ -31,6 +31,21 @@ data class UiState(
     val errorMessage: String = "",
 )
 
+private data class CoreUiState(
+    val prefs: AppPrefs,
+    val sessions: List<SessionEntity>,
+    val messages: List<MessageEntity>,
+    val currentSessionId: String,
+)
+
+private data class NetworkUiState(
+    val isLoading: Boolean,
+    val responseCode: Int?,
+    val responseMessage: String,
+    val responseBody: String,
+    val errorMessage: String,
+)
+
 class AppViewModel(
     private val settingsStore: SettingsStore,
     private val chatRepository: ChatRepository,
@@ -56,27 +71,50 @@ class AppViewModel(
         }
     }
 
-    val uiState: StateFlow<UiState> = combine(
+    private val coreUiStateFlow = combine(
         prefsFlow,
         sessionsFlow,
         messagesFlow,
         currentSessionIdFlow,
+    ) { prefs, sessions, messages, currentSessionId ->
+        CoreUiState(
+            prefs = prefs,
+            sessions = sessions,
+            messages = messages,
+            currentSessionId = currentSessionId,
+        )
+    }
+
+    private val networkUiStateFlow = combine(
         loading,
         responseCode,
         responseMessage,
         responseBody,
         errorMessage,
-    ) { prefs, sessions, messages, currentSessionId, isLoading, code, message, body, error ->
-        UiState(
-            prefs = prefs,
-            sessions = sessions,
-            messages = messages,
-            currentSessionId = currentSessionId,
+    ) { isLoading, code, message, body, error ->
+        NetworkUiState(
             isLoading = isLoading,
             responseCode = code,
             responseMessage = message,
             responseBody = body,
             errorMessage = error,
+        )
+    }
+
+    val uiState: StateFlow<UiState> = combine(
+        coreUiStateFlow,
+        networkUiStateFlow,
+    ) { core, network ->
+        UiState(
+            prefs = core.prefs,
+            sessions = core.sessions,
+            messages = core.messages,
+            currentSessionId = core.currentSessionId,
+            isLoading = network.isLoading,
+            responseCode = network.responseCode,
+            responseMessage = network.responseMessage,
+            responseBody = network.responseBody,
+            errorMessage = network.errorMessage,
         )
     }.stateIn(
         viewModelScope,
