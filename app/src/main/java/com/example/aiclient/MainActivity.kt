@@ -55,6 +55,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -661,9 +662,11 @@ private fun SettingsDialog(
                     valueRange = 0f..2f,
                     steps = 19,
                     modifier = Modifier.fillMaxWidth(),
-                    activeTrackColor = Color(0xFF10A37F),
+                    colors = SliderDefaults.colors(
+                        activeTrackColor = Color(0xFF10A37F),
                     inactiveTrackColor = Color(0xFF333333),
                     thumbColor = Color(0xFF10A37F),
+                    ),
                 )
 
                 // Max Tokens
