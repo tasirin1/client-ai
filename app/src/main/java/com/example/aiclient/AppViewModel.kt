@@ -20,9 +20,16 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+data class SessionPreview(
+    val session: SessionEntity,
+    val lastMessage: String? = null,
+    val lastMessageTime: Long? = null,
+)
+
 data class UiState(
     val prefs: AppPrefs = AppPrefs(),
-    val sessions: List<SessionEntity> = emptyList(),
+    val sessions: List<SessionPreview> = emptyList(),
+    val groupedSessions: Map<String, List<SessionPreview>> = emptyMap(),
     val messages: List<MessageEntity> = emptyList(),
     val currentSessionId: String = "",
     val isLoading: Boolean = false,
@@ -30,11 +37,12 @@ data class UiState(
     val responseMessage: String = "",
     val responseBody: String = "",
     val errorMessage: String = "",
+    val sessionSearchQuery: String = "",
 )
 
 private data class CoreUiState(
     val prefs: AppPrefs,
-    val sessions: List<SessionEntity>,
+    val sessions: List<SessionPreview>,
     val messages: List<MessageEntity>,
     val currentSessionId: String,
 )
@@ -57,9 +65,34 @@ class AppViewModel(
     private val responseMessage = MutableStateFlow("")
     private val responseBody = MutableStateFlow("")
     private val errorMessage = MutableStateFlow("")
+    private val searchQuery = MutableStateFlow("")
 
     private val prefsFlow = settingsStore.prefsFlow
     private val sessionsFlow = chatRepository.observeSessions()
+    private val lastMessagesFlow = chatRepository.observeLastMessagesForAllSessions()
+
+    private val sessionPreviewsFlow = combine(
+        sessionsFlow,
+        lastMessagesFlow,
+    ) { sessions, lastMessages ->
+        val msgMap = lastMessages.associateBy { it.sessionId }
+        sessions.map { session ->
+            val lastMsg = msgMap[session.id]
+            SessionPreview(
+                session = session,
+                lastMessage = lastMsg?.let { truncatePreview(it.content) },
+                lastMessageTime = lastMsg?.createdAt,
+            )
+        }
+    }
+
+    private val filteredSessionsFlow = combine(
+        sessionPreviewsFlow,
+        searchQuery,
+    ) { previews, query ->
+        if (query.isBlank()) previews
+        else previews.filter { it.session.title.contains(query, ignoreCase = true) }
+    }
 
     private val currentSessionIdFlow = prefsFlow.map { it.activeSessionId }
 
@@ -74,10 +107,11 @@ class AppViewModel(
 
     private val coreUiStateFlow = combine(
         prefsFlow,
-        sessionsFlow,
+        filteredSessionsFlow,
         messagesFlow,
         currentSessionIdFlow,
-    ) { prefs, sessions, messages, currentSessionId ->
+        searchQuery,
+    ) { prefs, sessions, messages, currentSessionId, query ->
         CoreUiState(
             prefs = prefs,
             sessions = sessions,
@@ -109,6 +143,7 @@ class AppViewModel(
         UiState(
             prefs = core.prefs,
             sessions = core.sessions,
+            groupedSessions = groupSessionsByDate(core.sessions),
             messages = core.messages,
             currentSessionId = core.currentSessionId,
             isLoading = network.isLoading,
@@ -116,6 +151,7 @@ class AppViewModel(
             responseMessage = network.responseMessage,
             responseBody = network.responseBody,
             errorMessage = network.errorMessage,
+            sessionSearchQuery = network.isLoading.toString().takeIf { false } ?: "", // just placeholder
         )
     }.stateIn(
         viewModelScope,
@@ -157,6 +193,7 @@ class AppViewModel(
     fun updateQuickInput(value: String) = persistPrefs { it.copy(quickInput = value) }
     fun updateGlobalMemory(value: String) = persistPrefs { it.copy(globalMemory = value) }
     fun updateActiveSession(sessionId: String) = persistPrefs { it.copy(activeSessionId = sessionId) }
+    fun updateSessionSearch(value: String) { searchQuery.value = value }
 
     fun createSession() {
         viewModelScope.launch {
@@ -217,15 +254,10 @@ class AppViewModel(
     }
 
     private fun buildRequest(prefs: AppPrefs, history: List<MessageEntity>): Pair<String, String> {
-        val isAiProvider = prefs.apiProvider.equals("OpenAI", ignoreCase = true) ||
-                prefs.apiProvider.equals("Anthropic", ignoreCase = true) ||
-                prefs.apiProvider.equals("Google", ignoreCase = true)
-
-        return if (isAiProvider && prefs.apiKey.isNotBlank()) {
-            buildAiRequest(prefs, history)
-        } else {
-            buildCustomRequest(prefs, history)
+        if (prefs.apiKey.isNotBlank()) {
+            return buildAiRequest(prefs, history)
         }
+        return buildCustomRequest(prefs, history)
     }
 
     private fun buildAiRequest(prefs: AppPrefs, history: List<MessageEntity>): Pair<String, String> {
@@ -343,4 +375,51 @@ class AppViewModel(
             }
         }
     }
+}
+
+private fun truncatePreview(text: String): String {
+    return text.replace("\n", " ")
+        .replace("\r", " ")
+        .trim()
+        .take(120)
+        .let { if (it.length >= 120) "$it..." else it }
+}
+
+fun groupSessionsByDate(sessions: List<SessionPreview>): Map<String, List<SessionPreview>> {
+    if (sessions.isEmpty()) return emptyMap()
+
+    val now = java.util.Calendar.getInstance()
+    val todayStart = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.HOUR_OF_DAY, 0)
+        set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+    }
+    val yesterdayStart = todayStart.clone() as java.util.Calendar
+    yesterdayStart.add(java.util.Calendar.DAY_OF_YEAR, -1)
+    val thisWeekStart = todayStart.clone() as java.util.Calendar
+    thisWeekStart.set(java.util.Calendar.DAY_OF_WEEK, thisWeekStart.getFirstDayOfWeek())
+    val thisMonthStart = todayStart.clone() as java.util.Calendar
+    thisMonthStart.set(java.util.Calendar.DAY_OF_MONTH, 1)
+
+    val groups = linkedMapOf<String, MutableList<SessionPreview>>()
+    groups["Hari Ini"] = mutableListOf()
+    groups["Kemarin"] = mutableListOf()
+    groups["7 Hari Terakhir"] = mutableListOf()
+    groups["Bulan Ini"] = mutableListOf()
+    groups["Sebelumnya"] = mutableListOf()
+
+    for (preview in sessions) {
+        val time = preview.session.updatedAt
+        val group = when {
+            time >= todayStart.timeInMillis -> "Hari Ini"
+            time >= yesterdayStart.timeInMillis -> "Kemarin"
+            time >= thisWeekStart.timeInMillis -> "7 Hari Terakhir"
+            time >= thisMonthStart.timeInMillis -> "Bulan Ini"
+            else -> "Sebelumnya"
+        }
+        groups[group]!!.add(preview)
+    }
+
+    return groups.filter { it.value.isNotEmpty() }
 }

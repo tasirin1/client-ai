@@ -31,4 +31,10 @@ interface ChatDao {
 
     @Query("DELETE FROM sessions WHERE id = :sessionId")
     suspend fun deleteSession(sessionId: String)
+
+    @Query("SELECT m.* FROM messages m INNER JOIN (SELECT sessionId, MAX(createdAt) AS maxDate FROM messages GROUP BY sessionId) latest ON m.sessionId = latest.sessionId AND m.createdAt = latest.maxDate")
+    fun observeLastMessagesForAllSessions(): Flow<List<MessageEntity>>
+
+    @Query("SELECT * FROM messages WHERE sessionId = :sessionId AND createdAt = (SELECT MAX(createdAt) FROM messages WHERE sessionId = :sessionId)")
+    suspend fun getLastMessage(sessionId: String): MessageEntity?
 }

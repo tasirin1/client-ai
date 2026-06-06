@@ -23,8 +23,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -34,8 +34,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -56,7 +58,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -83,8 +84,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.aiclient.data.MessageEntity
 import com.example.aiclient.data.AppPrefs
+import com.example.aiclient.data.MessageEntity
 import com.example.aiclient.data.SessionEntity
 import com.example.aiclient.ui.AIClientTheme
 import java.text.SimpleDateFormat
@@ -109,6 +110,7 @@ class MainActivity : ComponentActivity() {
                     onDeleteSession = vm::deleteSession,
                     onQuickInputChange = vm::updateQuickInput,
                     onSend = vm::sendRequest,
+                    onSessionSearch = vm::updateSessionSearch,
                     onUpdateApiKey = vm::updateApiKey,
                     onUpdateProvider = vm::updateProvider,
                     onUpdateModel = vm::updateModel,
@@ -131,6 +133,7 @@ private fun MainScreen(
     onDeleteSession: (String) -> Unit,
     onQuickInputChange: (String) -> Unit,
     onSend: () -> Unit,
+    onSessionSearch: (String) -> Unit,
     onUpdateApiKey: (String) -> Unit,
     onUpdateProvider: (String) -> Unit,
     onUpdateModel: (String) -> Unit,
@@ -156,12 +159,14 @@ private fun MainScreen(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                modifier = Modifier.width(300.dp),
-                drawerContainerColor = Color(0xFF1A1A1A),
+                modifier = Modifier.width(320.dp),
+                drawerContainerColor = Color(0xFF161616),
             ) {
                 SessionSidebar(
-                    sessions = uiState.sessions,
+                    groupedSessions = uiState.groupedSessions,
                     activeSessionId = uiState.currentSessionId,
+                    searchQuery = uiState.sessionSearchQuery,
+                    onSearchChange = onSessionSearch,
                     onCreateSession = {
                         onCreateSession()
                         scope.launch { drawerState.close() }
@@ -179,9 +184,9 @@ private fun MainScreen(
             topBar = {
                 TopAppBar(
                     title = {
-                        val currentSession = uiState.sessions.find { it.id == uiState.currentSessionId }
+                        val currentSession = uiState.sessions.find { it.session.id == uiState.currentSessionId }
                         Text(
-                            text = currentSession?.title ?: "AI Client",
+                            text = currentSession?.session?.title ?: "AI Client",
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -201,7 +206,7 @@ private fun MainScreen(
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color(0xFF1A1A1A),
+                        containerColor = Color(0xFF161616),
                         titleContentColor = Color(0xFFE0E0E0),
                     ),
                 )
@@ -213,7 +218,6 @@ private fun MainScreen(
                     .background(Color(0xFF121212))
                     .padding(padding),
             ) {
-                // Chat messages area
                 ChatArea(
                     messages = uiState.messages,
                     isLoading = uiState.isLoading,
@@ -221,7 +225,6 @@ private fun MainScreen(
                     modifier = Modifier.weight(1f),
                 )
 
-                // Composer bar
                 ComposerBar(
                     quickInput = uiState.prefs.quickInput,
                     onQuickInputChange = onQuickInputChange,
@@ -232,7 +235,6 @@ private fun MainScreen(
         }
     }
 
-    // Settings dialog
     if (showSettings.value) {
         SettingsDialog(
             prefs = uiState.prefs,
@@ -250,8 +252,10 @@ private fun MainScreen(
 
 @Composable
 private fun SessionSidebar(
-    sessions: List<SessionEntity>,
+    groupedSessions: Map<String, List<SessionPreview>>,
     activeSessionId: String,
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
     onCreateSession: () -> Unit,
     onSelectSession: (String) -> Unit,
     onDeleteSession: (String) -> Unit,
@@ -259,78 +263,176 @@ private fun SessionSidebar(
     Column(
         modifier = Modifier
             .fillMaxHeight()
-            .background(Color(0xFF1A1A1A))
-            .padding(12.dp),
+            .background(Color(0xFF161616)),
     ) {
+        // New Chat button
         Button(
             onClick = onCreateSession,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFF10A37F),
                 contentColor = Color.White,
             ),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(10.dp),
         ) {
             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text("Chat Baru", fontWeight = FontWeight.SemiBold)
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "Riwayat Chat",
-            color = Color(0xFF888888),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+        // Search bar
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp),
+            placeholder = { Text("Cari chat...", color = Color(0xFF666666), fontSize = 14.sp) },
+            leadingIcon = {
+                Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF666666), modifier = Modifier.size(18.dp))
+            },
+            trailingIcon = {
+                if (searchQuery.isNotBlank()) {
+                    IconButton(onClick = { onSearchChange("") }, modifier = Modifier.size(20.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Hapus", tint = Color(0xFF666666), modifier = Modifier.size(16.dp))
+                    }
+                }
+            },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodySmall.copy(color = Color(0xFFE0E0E0)),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFF10A37F),
+                unfocusedBorderColor = Color(0xFF333333),
+                cursorColor = Color(0xFF10A37F),
+                focusedContainerColor = Color(0xFF1E1E1E),
+                unfocusedContainerColor = Color(0xFF1E1E1E),
+            ),
+            shape = RoundedCornerShape(10.dp),
         )
 
+        Spacer(modifier = Modifier.height(4.dp))
+
         LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            items(sessions) { session ->
-                val isActive = session.id == activeSessionId
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelectSession(session.id) },
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isActive) Color(0xFF2C2C2C) else Color(0xFF1A1A1A),
-                    ),
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    Row(
+            groupedSessions.forEach { (groupName, sessions) ->
+                item {
+                    Text(
+                        text = groupName,
+                        color = Color(0xFF888888),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+
+                items(sessions) { preview ->
+                    val isActive = preview.session.id == activeSessionId
+                    SessionCard(
+                        preview = preview,
+                        isActive = isActive,
+                        onSelect = { onSelectSession(preview.session.id) },
+                        onDelete = { onDeleteSession(preview.session.id) },
+                        showDelete = groupedSessions.values.flatten().size > 1,
+                    )
+                }
+            }
+
+            // Empty state
+            if (groupedSessions.values.all { it.isEmpty() }) {
+                item {
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Text(text = "💬", fontSize = 16.sp)
-                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = session.title,
-                            color = if (isActive) Color.White else Color(0xFFCCCCCC),
-                            fontSize = 14.sp,
-                            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
+                            text = "Tidak ada chat",
+                            color = Color(0xFF666666),
+                            fontSize = 13.sp,
                         )
-                        if (sessions.size > 1) {
-                            IconButton(
-                                onClick = { onDeleteSession(session.id) },
-                                modifier = Modifier.size(32.dp),
-                            ) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = "Hapus",
-                                    tint = Color(0xFF666666),
-                                    modifier = Modifier.size(16.dp),
-                                )
-                            }
-                        }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionCard(
+    preview: SessionPreview,
+    isActive: Boolean,
+    onSelect: () -> Unit,
+    onDelete: () -> Unit,
+    showDelete: Boolean,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .clickable { onSelect },
+        colors = CardDefaults.cardColors(
+            containerColor = if (isActive) Color(0xFF2A2A2A) else Color(0xFF161616),
+        ),
+        shape = RoundedCornerShape(10.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Text(
+                text = "💬",
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = preview.session.title,
+                    color = if (isActive) Color.White else Color(0xFFCCCCCC),
+                    fontSize = 13.sp,
+                    fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (preview.lastMessage != null) {
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = preview.lastMessage,
+                        color = Color(0xFF777777),
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 15.sp,
+                    )
+                }
+                if (preview.lastMessageTime != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = formatDateLabel(preview.lastMessageTime),
+                        color = Color(0xFF555555),
+                        fontSize = 10.sp,
+                    )
+                }
+            }
+            if (showDelete) {
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Hapus",
+                        tint = Color(0xFF555555),
+                        modifier = Modifier.size(14.dp),
+                    )
                 }
             }
         }
@@ -344,35 +446,59 @@ private fun ChatArea(
     listState: LazyListState,
     modifier: Modifier = Modifier,
 ) {
-    LazyColumn(
-        state = listState,
-        modifier = modifier
-            .fillMaxWidth()
-            .background(Color(0xFF121212))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(messages) { message ->
-            ChatBubble(message = message)
+    if (messages.isEmpty() && !isLoading) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(Color(0xFF121212)),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(text = "👋", fontSize = 48.sp)
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Mulai chat baru",
+                color = Color(0xFF888888),
+                fontSize = 16.sp,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Atur API Key di pengaturan lalu kirim pesan",
+                color = Color(0xFF666666),
+                fontSize = 13.sp,
+            )
         }
-        if (isLoading) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    } else {
+        LazyColumn(
+            state = listState,
+            modifier = modifier
+                .fillMaxWidth()
+                .background(Color(0xFF121212))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(messages) { message ->
+                ChatBubble(message = message)
+            }
+            if (isLoading) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = Color(0xFF10A37F),
-                            strokeWidth = 2.dp,
-                        )
-                        Text("Memproses...", color = Color(0xFF888888), fontSize = 14.sp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = Color(0xFF10A37F),
+                                strokeWidth = 2.dp,
+                            )
+                            Text("Memproses...", color = Color(0xFF888888), fontSize = 14.sp)
+                        }
                     }
                 }
             }
@@ -504,29 +630,33 @@ private fun SettingsDialog(
     onUpdateGlobalMemory: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val providers = listOf("OpenAI", "Anthropic", "Google", "Custom")
+    val providers = listOf("OpenAI", "Anthropic", "Google", "Deepseek", "Custom")
     val modelsByProvider = mapOf(
-        "OpenAI" to listOf("gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"),
-        "Anthropic" to listOf("claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"),
-        "Google" to listOf("gemini-1.5-pro", "gemini-1.5-flash", "gemini-pro"),
-        "Custom" to listOf("custom"),
+        "OpenAI" to listOf("gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1", "o1-mini", "o3-mini"),
+        "Anthropic" to listOf("claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"),
+        "Google" to listOf("gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.0-pro"),
+        "Deepseek" to listOf("deepseek-chat", "deepseek-reasoner"),
+        "Custom" to emptyList(),
     )
     val baseUrls = mapOf(
         "OpenAI" to "https://api.openai.com/v1/chat/completions",
         "Anthropic" to "https://api.anthropic.com/v1/messages",
         "Google" to "https://generativelanguage.googleapis.com/v1beta/models",
+        "Deepseek" to "https://api.deepseek.com/v1/chat/completions",
         "Custom" to prefs.baseUrl,
     )
 
     val selectedProvider = remember { mutableStateOf(prefs.apiProvider) }
     val selectedModel = remember { mutableStateOf(prefs.model) }
+    val customModel = remember { mutableStateOf("") }
     val apiKey = remember { mutableStateOf(prefs.apiKey) }
     val baseUrl = remember { mutableStateOf(prefs.baseUrl) }
     val temperature = remember { mutableFloatStateOf(prefs.temperature) }
     val maxTokens = remember { mutableStateOf(prefs.maxTokens.toString()) }
     val systemPrompt = remember { mutableStateOf(prefs.globalMemory) }
     val showApiKey = remember { mutableStateOf(false) }
-    val availableModels = modelsByProvider[selectedProvider.value] ?: modelsByProvider["OpenAI"]!!
+    val showCustomModelInput = remember { mutableStateOf(selectedProvider.value == "Custom" || !modelsByProvider[selectedProvider.value]?.contains(selectedModel.value)!!) }
+    val availableModels = modelsByProvider[selectedProvider.value] ?: emptyList()
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
@@ -547,11 +677,14 @@ private fun SettingsDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                // Provider
-                Text("Provider", color = Color(0xFF888888), fontSize = 13.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Provider buttons
+                Text("Provider", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                ) {
                     providers.forEach { provider ->
                         val isSelected = selectedProvider.value == provider
                         OutlinedButton(
@@ -560,21 +693,26 @@ private fun SettingsDialog(
                                 onUpdateProvider(provider)
                                 baseUrl.value = baseUrls[provider] ?: ""
                                 onUpdateBaseUrl(baseUrl.value)
-                                val models = modelsByProvider[provider] ?: modelsByProvider["OpenAI"]!!
-                                selectedModel.value = models.first()
-                                onUpdateModel(models.first())
+                                val models = modelsByProvider[provider] ?: emptyList()
+                                if (models.isNotEmpty()) {
+                                    selectedModel.value = models.first()
+                                    onUpdateModel(models.first())
+                                    showCustomModelInput.value = false
+                                } else {
+                                    showCustomModelInput.value = true
+                                }
                             },
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = if (isSelected) Color(0xFF10A37F) else Color(0xFF888888),
                             ),
                         ) {
-                            Text(provider, fontSize = 13.sp)
+                            Text(provider, fontSize = 12.sp)
                         }
                     }
                 }
 
                 // API Key
-                Text("API Key", color = Color(0xFF888888), fontSize = 13.sp)
+                Text("API Key", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 OutlinedTextField(
                     value = apiKey.value,
                     onValueChange = {
@@ -589,7 +727,7 @@ private fun SettingsDialog(
                             Text(
                                 if (showApiKey.value) "Sembunyi" else "Lihat",
                                 color = Color(0xFF10A37F),
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
                             )
                         }
                     },
@@ -606,27 +744,61 @@ private fun SettingsDialog(
                     shape = RoundedCornerShape(8.dp),
                 )
 
-                // Model
-                Text("Model", color = Color(0xFF888888), fontSize = 13.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    availableModels.forEach { model ->
-                        val isSelected = selectedModel.value == model
-                        OutlinedButton(
-                            onClick = {
-                                selectedModel.value = model
-                                onUpdateModel(model)
-                            },
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = if (isSelected) Color(0xFF10A37F) else Color(0xFF888888),
-                            ),
+                // Model selection
+                Text("Model", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                if (showCustomModelInput.value) {
+                    OutlinedTextField(
+                        value = if (selectedProvider.value == "Custom") customModel.value else selectedModel.value,
+                        onValueChange = {
+                            if (selectedProvider.value == "Custom") {
+                                customModel.value = it
+                            }
+                            selectedModel.value = it
+                            onUpdateModel(it)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Nama model...", color = Color(0xFF555555)) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF10A37F),
+                            unfocusedBorderColor = Color(0xFF333333),
+                            cursorColor = Color(0xFF10A37F),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = Color(0xFF121212),
+                            unfocusedContainerColor = Color(0xFF121212),
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                    )
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
                         ) {
-                            Text(model, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            availableModels.forEach { model ->
+                                val isSelected = selectedModel.value == model
+                                OutlinedButton(
+                                    onClick = {
+                                        selectedModel.value = model
+                                        onUpdateModel(model)
+                                    },
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = if (isSelected) Color(0xFF10A37F) else Color(0xFF888888),
+                                    ),
+                                ) {
+                                    Text(model, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                        TextButton(onClick = { showCustomModelInput.value = true }) {
+                            Text("+ Model kustom", color = Color(0xFF10A37F), fontSize = 12.sp)
                         }
                     }
                 }
 
                 // Base URL
-                Text("Base URL", color = Color(0xFF888888), fontSize = 13.sp)
+                Text("Base URL", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 OutlinedTextField(
                     value = baseUrl.value,
                     onValueChange = {
@@ -651,7 +823,8 @@ private fun SettingsDialog(
                 Text(
                     "Temperature: ${"%.1f".format(temperature.floatValue)}",
                     color = Color(0xFF888888),
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
                 )
                 Slider(
                     value = temperature.floatValue,
@@ -664,13 +837,13 @@ private fun SettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     colors = SliderDefaults.colors(
                         activeTrackColor = Color(0xFF10A37F),
-                    inactiveTrackColor = Color(0xFF333333),
-                    thumbColor = Color(0xFF10A37F),
+                        inactiveTrackColor = Color(0xFF333333),
+                        thumbColor = Color(0xFF10A37F),
                     ),
                 )
 
                 // Max Tokens
-                Text("Max Tokens", color = Color(0xFF888888), fontSize = 13.sp)
+                Text("Max Tokens", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 OutlinedTextField(
                     value = maxTokens.value,
                     onValueChange = {
@@ -693,7 +866,7 @@ private fun SettingsDialog(
                 )
 
                 // System Prompt
-                Text("System Prompt", color = Color(0xFF888888), fontSize = 13.sp)
+                Text("System Prompt", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 OutlinedTextField(
                     value = systemPrompt.value,
                     onValueChange = {
@@ -702,7 +875,7 @@ private fun SettingsDialog(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
-                    maxLines = 6,
+                    maxLines = 5,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color(0xFF10A37F),
                         unfocusedBorderColor = Color(0xFF333333),
@@ -715,16 +888,17 @@ private fun SettingsDialog(
                     shape = RoundedCornerShape(8.dp),
                 )
 
-                // Spacer so button at bottom has some room
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
             }
         },
         confirmButton = {
             Button(
                 onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(10.dp),
             ) {
                 Text("Simpan & Tutup", color = Color.White, fontWeight = FontWeight.SemiBold)
             }
@@ -739,4 +913,17 @@ private fun formatMessageTime(timestamp: Long): String {
         now.get(Calendar.DAY_OF_YEAR) == value.get(Calendar.DAY_OF_YEAR)
     val format = if (sameDay) "HH:mm" else "d MMM HH:mm"
     return SimpleDateFormat(format, Locale.getDefault()).format(Date(timestamp))
+}
+
+private fun formatDateLabel(timestamp: Long): String {
+    val now = Calendar.getInstance()
+    val value = Calendar.getInstance().apply { timeInMillis = timestamp }
+    val sameDay = now.get(Calendar.YEAR) == value.get(Calendar.YEAR) &&
+        now.get(Calendar.DAY_OF_YEAR) == value.get(Calendar.DAY_OF_YEAR)
+
+    return if (sameDay) {
+        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
+    } else {
+        SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(timestamp))
+    }
 }

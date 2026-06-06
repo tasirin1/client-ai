@@ -10,7 +10,11 @@ class ChatRepository(
 
     fun observeMessages(sessionId: String): Flow<List<MessageEntity>> = chatDao.observeMessages(sessionId)
 
+    fun observeLastMessagesForAllSessions(): Flow<List<MessageEntity>> = chatDao.observeLastMessagesForAllSessions()
+
     suspend fun getSessionOnce(sessionId: String): SessionEntity? = chatDao.getSessionOnce(sessionId)
+
+    suspend fun getLastMessage(sessionId: String): MessageEntity? = chatDao.getLastMessage(sessionId)
 
     suspend fun ensureSession(sessionId: String?, titleHint: String = "Sesi baru"): SessionEntity {
         val now = System.currentTimeMillis()
