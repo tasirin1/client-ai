@@ -152,6 +152,7 @@ private fun MainScreen(
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val showSettings = rememberSaveable { mutableStateOf(false) }
     val chatListState = rememberLazyListState()
 
     // Auto-scroll when new messages arrive
