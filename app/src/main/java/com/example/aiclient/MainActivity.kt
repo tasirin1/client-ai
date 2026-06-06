@@ -3,12 +3,13 @@ package com.example.aiclient
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,29 +17,35 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -49,7 +56,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.aiclient.data.MessageEntity
 import com.example.aiclient.data.SessionEntity
 import com.example.aiclient.ui.AIClientTheme
-import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,6 +96,15 @@ private fun AppScreen(
     onMemoryChange: (String) -> Unit,
     onSend: () -> Unit,
 ) {
+    val showAdvanced = rememberSaveable { mutableStateOf(false) }
+    val chatListState = rememberLazyListState()
+
+    LaunchedEffect(uiState.messages.size) {
+        if (uiState.messages.isNotEmpty()) {
+            chatListState.animateScrollToItem(uiState.messages.lastIndex)
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = Color(0xFF08121F),
@@ -118,60 +133,69 @@ private fun AppScreen(
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 Text(
-                                    text = "Client API generik dengan memori lintas sesi",
+                                    text = "Chat UI untuk API apa saja",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = Color(0xFF9FB4C7),
                                 )
                             }
                         },
+                        actions = {
+                            TextButton(onClick = { showAdvanced.value = !showAdvanced.value }) {
+                                Icon(Icons.Default.Settings, contentDescription = null, tint = Color(0xFF7EE0D1))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (showAdvanced.value) "Sembunyikan" else "Advanced",
+                                    color = Color(0xFF7EE0D1),
+                                )
+                            }
+                        },
+                    )
+                },
+                bottomBar = {
+                    ComposerBar(
+                        quickInput = uiState.prefs.quickInput,
+                        onQuickInputChange = onQuickInputChange,
+                        onSend = onSend,
+                        isLoading = uiState.isLoading,
                     )
                 },
             ) { padding ->
-                LazyColumn(
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
                         .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    item {
-                        SessionStrip(
-                            sessions = uiState.sessions,
-                            currentSessionId = uiState.currentSessionId,
-                            onCreateSession = onCreateSession,
-                            onSelectSession = onSelectSession,
-                        )
-                    }
-                    item {
-                        RequestCard(
+                    SessionStrip(
+                        sessions = uiState.sessions,
+                        currentSessionId = uiState.currentSessionId,
+                        onCreateSession = onCreateSession,
+                        onSelectSession = onSelectSession,
+                    )
+
+                    MessageTranscript(
+                        messages = uiState.messages,
+                        modifier = Modifier.weight(1f),
+                        listState = chatListState,
+                    )
+
+                    AnimatedVisibility(visible = showAdvanced.value) {
+                        AdvancedSettingsCard(
                             endpointUrl = uiState.prefs.endpointUrl,
                             method = uiState.prefs.method,
                             headers = uiState.prefs.defaultHeaders,
                             bodyTemplate = uiState.prefs.bodyTemplate,
-                            quickInput = uiState.prefs.quickInput,
                             globalMemory = uiState.prefs.globalMemory,
                             onEndpointChange = onEndpointChange,
                             onMethodChange = onMethodChange,
                             onHeadersChange = onHeadersChange,
                             onBodyTemplateChange = onBodyTemplateChange,
-                            onQuickInputChange = onQuickInputChange,
                             onMemoryChange = onMemoryChange,
-                            onSend = onSend,
-                            isLoading = uiState.isLoading,
                         )
                     }
-                    item {
-                        ResponseCard(
-                            code = uiState.responseCode,
-                            message = uiState.responseMessage,
-                            body = uiState.responseBody,
-                            error = uiState.errorMessage,
-                        )
-                    }
-                    item {
-                        HistoryCard(messages = uiState.messages)
-                    }
-                    item { Spacer(modifier = Modifier.height(24.dp)) }
+
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }
@@ -187,14 +211,14 @@ private fun SessionStrip(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF10263E)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1A2B)),
         shape = RoundedCornerShape(24.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "Sesi",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White,
                 )
@@ -205,6 +229,7 @@ private fun SessionStrip(
                     Text("Baru", color = Color(0xFF7EE0D1))
                 }
             }
+
             if (sessions.isEmpty()) {
                 Text(text = "Belum ada sesi tersimpan.", color = Color(0xFF9FB4C7))
             } else {
@@ -224,7 +249,7 @@ private fun SessionStrip(
                                     color = if (selected) Color(0xFF08121F) else Color.White,
                                 )
                             },
-                            colors = androidx.compose.material3.AssistChipDefaults.assistChipColors(
+                            colors = AssistChipDefaults.assistChipColors(
                                 containerColor = if (selected) Color(0xFF7EE0D1) else Color(0xFF18324F),
                                 labelColor = if (selected) Color(0xFF08121F) else Color.White,
                             ),
@@ -237,36 +262,121 @@ private fun SessionStrip(
 }
 
 @Composable
-private fun RequestCard(
-    endpointUrl: String,
-    method: String,
-    headers: String,
-    bodyTemplate: String,
+private fun MessageTranscript(
+    messages: List<MessageEntity>,
+    modifier: Modifier = Modifier,
+    listState: LazyListState,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0B1624)),
+        shape = RoundedCornerShape(28.dp),
+    ) {
+        if (messages.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Mulai percakapan",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Tulis pesan di bawah untuk mengirim ke API.",
+                        color = Color(0xFF9FB4C7),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 14.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                items(messages, key = { it.id }) { message ->
+                    ChatBubble(message = message)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatBubble(
+    message: MessageEntity,
+) {
+    val isUser = message.role == "request"
+    val isError = message.role == "error"
+    val containerColor = when {
+        isError -> Color(0xFF4B2430)
+        isUser -> Color(0xFF16304D)
+        else -> Color(0xFF122437)
+    }
+    val textColor = if (isUser) Color.White else Color(0xFFEAF3FF)
+    val senderLabel = when (message.role) {
+        "request" -> "You"
+        "response" -> "Assistant"
+        else -> "System"
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart,
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = containerColor),
+            shape = RoundedCornerShape(22.dp),
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = senderLabel,
+                    color = when {
+                        isError -> Color(0xFFFFA59A)
+                        isUser -> Color(0xFF7EE0D1)
+                        else -> Color(0xFFF4B860)
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = message.content,
+                    color = textColor,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ComposerBar(
     quickInput: String,
-    globalMemory: String,
-    onEndpointChange: (String) -> Unit,
-    onMethodChange: (String) -> Unit,
-    onHeadersChange: (String) -> Unit,
-    onBodyTemplateChange: (String) -> Unit,
     onQuickInputChange: (String) -> Unit,
-    onMemoryChange: (String) -> Unit,
     onSend: () -> Unit,
     isLoading: Boolean,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1F33)),
-        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF09121D)),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Request Builder", color = Color.White, style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(
-                value = endpointUrl,
-                onValueChange = onEndpointChange,
-                label = { Text("Endpoint URL (https://...)") },
+                value = quickInput,
+                onValueChange = onQuickInputChange,
+                label = { Text("Ketik pesan") },
                 modifier = Modifier.fillMaxWidth(),
+                minLines = 2,
+                maxLines = 4,
             )
-            MethodSelector(method = method, onMethodChange = onMethodChange)
             Button(
                 onClick = onSend,
                 enabled = !isLoading,
@@ -274,38 +384,70 @@ private fun RequestCard(
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(if (isLoading) "Mengirim..." else "Send")
+                Text(if (isLoading) "Mengirim..." else "Kirim")
             }
+        }
+    }
+}
+
+@Composable
+private fun AdvancedSettingsCard(
+    endpointUrl: String,
+    method: String,
+    headers: String,
+    bodyTemplate: String,
+    globalMemory: String,
+    onEndpointChange: (String) -> Unit,
+    onMethodChange: (String) -> Unit,
+    onHeadersChange: (String) -> Unit,
+    onBodyTemplateChange: (String) -> Unit,
+    onMemoryChange: (String) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1F33)),
+        shape = RoundedCornerShape(28.dp),
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                text = "Pengaturan API",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
             OutlinedTextField(
-                value = quickInput,
-                onValueChange = onQuickInputChange,
-                label = { Text("Input / Prompt") },
+                value = endpointUrl,
+                onValueChange = onEndpointChange,
+                label = { Text("Endpoint URL") },
                 modifier = Modifier.fillMaxWidth(),
-                minLines = 2,
+            )
+            MethodSelector(
+                method = method,
+                onMethodChange = onMethodChange,
             )
             OutlinedTextField(
                 value = headers,
                 onValueChange = onHeadersChange,
                 label = { Text("Headers") },
                 modifier = Modifier.fillMaxWidth(),
-                minLines = 4,
+                minLines = 3,
             )
             OutlinedTextField(
                 value = bodyTemplate,
                 onValueChange = onBodyTemplateChange,
                 label = { Text("Body Template") },
                 modifier = Modifier.fillMaxWidth(),
-                minLines = 8,
+                minLines = 6,
             )
             OutlinedTextField(
                 value = globalMemory,
                 onValueChange = onMemoryChange,
-                label = { Text("Global Memory") },
+                label = { Text("Memory Global") },
                 modifier = Modifier.fillMaxWidth(),
-                minLines = 4,
+                minLines = 3,
             )
             Text(
-                text = "Placeholder: {{input}} / {{input_json}}, {{memory}} / {{memory_json}}, {{history}} / {{history_json}}",
+                text = "Placeholder: {{input_json}}, {{memory_json}}, {{history_json}}",
                 color = Color(0xFF9FB4C7),
                 style = MaterialTheme.typography.labelMedium,
             )
@@ -340,68 +482,6 @@ private fun MethodSelector(
                     labelColor = if (selected) Color(0xFF08121F) else Color.White,
                 ),
             )
-        }
-    }
-}
-
-@Composable
-private fun ResponseCard(
-    code: Int?,
-    message: String,
-    body: String,
-    error: String,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1F33)),
-        shape = RoundedCornerShape(28.dp),
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Response", color = Color.White, style = MaterialTheme.typography.titleMedium)
-            if (code != null) {
-                Text(
-                    text = "HTTP $code ${message.trim()}",
-                    color = Color(0xFF7EE0D1),
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            if (error.isNotBlank()) {
-                Text(text = error, color = Color(0xFFFFA59A))
-            }
-            if (body.isBlank()) {
-                Text(text = "Belum ada response.", color = Color(0xFF9FB4C7))
-            } else {
-                Text(text = body, color = Color.White)
-            }
-        }
-    }
-}
-
-@Composable
-private fun HistoryCard(messages: List<MessageEntity>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1F33)),
-        shape = RoundedCornerShape(28.dp),
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Riwayat Sesi", color = Color.White, style = MaterialTheme.typography.titleMedium)
-            if (messages.isEmpty()) {
-                Text(text = "Belum ada pesan yang disimpan.", color = Color(0xFF9FB4C7))
-            } else {
-                messages.takeLast(10).forEach { msg ->
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            text = msg.role.uppercase(Locale.getDefault()),
-                            color = Color(0xFF7EE0D1),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(text = msg.content, color = Color.White)
-                        Divider(color = Color(0x223D5B7A))
-                    }
-                }
-            }
         }
     }
 }
