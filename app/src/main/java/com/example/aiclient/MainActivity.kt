@@ -237,7 +237,7 @@ private fun MainScreen(
                 ComposerBar(
                     quickInput = inputText,
                     onQuickInputChange = { inputText = it },
-                    onSend = { onSend(inputText) },
+                    onSend = { onSend(inputText); inputText = "" },
                     isLoading = uiState.isLoading,
                 )
             }
