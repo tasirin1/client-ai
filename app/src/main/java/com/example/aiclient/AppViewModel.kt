@@ -533,19 +533,6 @@ class AppViewModel(
 
         return Triple(prefs.baseUrl, headers, body)
     }
-        val historyText = history.joinToString("\n\n") { "${it.role}: ${it.content}" }
-        val renderedBody = apiClient.renderTemplate(
-            template = prefs.bodyTemplate,
-            input = input,
-            memory = prefs.globalMemory,
-            history = historyText,
-            model = prefs.model,
-            temperature = prefs.temperature,
-            maxTokens = prefs.maxTokens,
-            apiKey = prefs.apiKey,
-        )
-        return Pair(prefs.defaultHeaders, renderedBody)
-    }
 
     private suspend fun ensureCurrentSession(prefs: AppPrefs): SessionEntity {
         val activeId = prefs.activeSessionId
