@@ -105,13 +105,16 @@ class MainActivity : ComponentActivity() {
             AIClientTheme {
                 val vm: AppViewModel = viewModel(factory = AppViewModel.factory(container))
                 val uiState by vm.uiState.collectAsState()
+                val inputText = remember { mutableStateOf("") }
                 MainScreen(
                     uiState = uiState,
                     onCreateSession = vm::createSession,
                     onSelectSession = vm::updateActiveSession,
                     onDeleteSession = vm::deleteSession,
-                    onQuickInputChange = vm::updateQuickInput,
-                    onSend = vm::sendRequest,
+                    onSend = { text ->
+                        vm.sendRequest(text)
+                        inputText.value = ""
+                    },
                     onSessionSearch = vm::updateSessionSearch,
                     onUpdateApiKey = vm::updateApiKey,
                     onUpdateProvider = vm::updateProvider,
@@ -136,8 +139,7 @@ private fun MainScreen(
     onCreateSession: () -> Unit,
     onSelectSession: (String) -> Unit,
     onDeleteSession: (String) -> Unit,
-    onQuickInputChange: (String) -> Unit,
-    onSend: () -> Unit,
+    onSend: (String) -> Unit,
     onSessionSearch: (String) -> Unit,
     onUpdateApiKey: (String) -> Unit,
     onUpdateProvider: (String) -> Unit,
@@ -235,9 +237,9 @@ private fun MainScreen(
                 )
 
                 ComposerBar(
-                    quickInput = uiState.currentInput,
-                    onQuickInputChange = onQuickInputChange,
-                    onSend = onSend,
+                    quickInput = inputText.value,
+                    onQuickInputChange = { inputText.value = it },
+                    onSend = { onSend(inputText.value) },
                     isLoading = uiState.isLoading,
                 )
             }
@@ -576,7 +578,7 @@ private fun ChatBubble(message: MessageEntity) {
 private fun ComposerBar(
     quickInput: String,
     onQuickInputChange: (String) -> Unit,
-    onSend: () -> Unit,
+    onSend: (String) -> Unit,
     isLoading: Boolean,
 ) {
     Card(
@@ -606,12 +608,12 @@ private fun ComposerBar(
                     unfocusedContainerColor = Color(0xFF121212),
                 ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { if (!isLoading && quickInput.isNotBlank()) onSend() }),
+                keyboardActions = KeyboardActions(onSend = { if (!isLoading && quickInput.isNotBlank()) onSend(quickInput) }),
                 shape = RoundedCornerShape(12.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
             Button(
-                onClick = onSend,
+                onClick = { onSend(quickInput) },
                 enabled = !isLoading && quickInput.isNotBlank(),
                 shape = CircleShape,
                 colors = ButtonDefaults.buttonColors(

@@ -11,6 +11,8 @@ import com.example.aiclient.data.SettingsStore
 import com.example.aiclient.network.ApiResult
 import com.example.aiclient.network.GenericApiClient
 import com.example.aiclient.network.toJsonString
+import org.json.JSONObject
+import org.json.JSONArray
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -41,7 +43,6 @@ data class UiState(
     val responseMessage: String = "",
     val responseBody: String = "",
     val errorMessage: String = "",
-    val currentInput: String = "",
     val sessionSearchQuery: String = "",
     val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
     val connectionError: String = "",
@@ -52,7 +53,6 @@ private data class CoreUiState(
     val sessions: List<SessionPreview>,
     val messages: List<MessageEntity>,
     val currentSessionId: String,
-    val currentInput: String,
     val connectionStatus: ConnectionStatus,
     val connectionError: String,
 )
@@ -72,12 +72,6 @@ private data class SessionState(
     val id: String,
 )
 
-private data class InputState(
-    val input: String,
-    val connStatus: ConnectionStatus,
-    val connError: String,
-)
-
 class AppViewModel(
     private val settingsStore: SettingsStore,
     private val chatRepository: ChatRepository,
@@ -89,7 +83,7 @@ class AppViewModel(
     private val responseBody = MutableStateFlow("")
     private val errorMessage = MutableStateFlow("")
     private val searchQuery = MutableStateFlow("")
-    private val currentInput = MutableStateFlow("")
+
     private val connectionStatus = MutableStateFlow(ConnectionStatus.IDLE)
     private val connectionError = MutableStateFlow("")
 
@@ -132,21 +126,16 @@ class AppViewModel(
     }
 
     private val coreUiStateFlow = combine(
-        combine(prefsFlow, filteredSessionsFlow, messagesFlow, currentSessionIdFlow) { prefs, sessions, messages, id ->
-            SessionState(prefs, sessions, messages, id)
-        },
-        combine(currentInput, connectionStatus, connectionError) { input, connStatus, connError ->
-            InputState(input, connStatus, connError)
-        }
-    ) { session, input ->
+        prefsFlow, filteredSessionsFlow, messagesFlow, currentSessionIdFlow,
+        connectionStatus, connectionError,
+    ) { prefs, sessions, messages, id, connStatus, connError ->
         CoreUiState(
-            prefs = session.prefs,
-            sessions = session.sessions,
-            messages = session.messages,
-            currentSessionId = session.id,
-            currentInput = input.input,
-            connectionStatus = input.connStatus,
-            connectionError = input.connError,
+            prefs = prefs,
+            sessions = sessions,
+            messages = messages,
+            currentSessionId = id,
+            connectionStatus = connStatus,
+            connectionError = connError,
         )
     }
 
@@ -181,7 +170,6 @@ class AppViewModel(
             responseMessage = network.responseMessage,
             responseBody = network.responseBody,
             errorMessage = network.errorMessage,
-            currentInput = core.currentInput,
             sessionSearchQuery = searchQuery.value,
             connectionStatus = core.connectionStatus,
             connectionError = core.connectionError,
@@ -218,9 +206,6 @@ class AppViewModel(
     fun updateTemperature(value: Float) = persistPrefs { it.copy(temperature = value) }
     fun updateMaxTokens(value: Int) = persistPrefs { it.copy(maxTokens = value) }
     fun updateGlobalMemory(value: String) = persistPrefs { it.copy(globalMemory = value) }
-
-    // --- Input (local state, no DataStore write) ---
-    fun updateQuickInput(value: String) { currentInput.value = value }
 
     // --- Legacy settings ---
     fun updateEndpointUrl(value: String) = persistPrefs { it.copy(endpointUrl = value) }
@@ -342,7 +327,7 @@ class AppViewModel(
     }
 
     // --- Send Request ---
-    fun sendRequest() {
+    fun sendRequest(input: String = "") {
         viewModelScope.launch {
             loading.value = true
             try {
@@ -351,7 +336,6 @@ class AppViewModel(
                 responseMessage.value = ""
                 responseBody.value = ""
 
-                val input = currentInput.value
                 val prefs = uiState.value.prefs
                 val session = ensureCurrentSession(prefs)
                 val history = chatRepository.getMessagesOnce(session.id)
@@ -374,7 +358,6 @@ class AppViewModel(
                     handleError(session.id, input.ifBlank { body }, throwable)
                 }
             } finally {
-                currentInput.value = ""
                 loading.value = false
             }
         }
@@ -534,6 +517,49 @@ class AppViewModel(
         return Triple(prefs.baseUrl, headers, body)
     }
 
+
+    /**
+     * Extract text content from API response JSON based on provider format.
+     */
+    private fun extractResponseText(provider: String, responseBody: String): String {
+        if (responseBody.isBlank()) return ""
+        return try {
+            val json = JSONObject(responseBody)
+            when (provider) {
+                "Google" -> {
+                    val candidates = json.optJSONArray("candidates")
+                    if (candidates != null && candidates.length() > 0) {
+                        val content = candidates.getJSONObject(0).optJSONObject("content")
+                        val parts = content?.optJSONArray("parts")
+                        if (parts != null && parts.length() > 0) {
+                            parts.getJSONObject(0).optString("text", responseBody)
+                        } else responseBody
+                    } else responseBody
+                }
+                "Anthropic" -> {
+                    val contentArr = json.optJSONArray("content")
+                    if (contentArr != null && contentArr.length() > 0) {
+                        contentArr.getJSONObject(0).optString("text", responseBody)
+                    } else responseBody
+                }
+                else -> {
+                    // OpenAI / Deepseek / compatible
+                    val choices = json.optJSONArray("choices")
+                    if (choices != null && choices.length() > 0) {
+                        val message = choices.getJSONObject(0).optJSONObject("message")
+                        message?.optString("content", responseBody) ?: responseBody
+                    } else {
+                        // Fallback: try to find any text field
+                        json.optString("text", responseBody)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // If parsing fails, return raw body
+            responseBody
+        }
+    }
+
     private suspend fun ensureCurrentSession(prefs: AppPrefs): SessionEntity {
         val activeId = prefs.activeSessionId
         val existing = activeId.takeIf { it.isNotBlank() }?.let { chatRepository.getSessionOnce(it) }
@@ -547,8 +573,10 @@ class AppViewModel(
     private suspend fun handleSuccess(sessionId: String, result: ApiResult, inputForRename: String) {
         responseCode.value = result.statusCode
         responseMessage.value = result.statusMessage
-        responseBody.value = result.responseBody
-        chatRepository.addMessage(sessionId, "response", result.responseBody)
+        val prefs = uiState.value.prefs
+        val extractedText = extractResponseText(prefs.apiProvider, result.responseBody)
+        responseBody.value = extractedText
+        chatRepository.addMessage(sessionId, "response", extractedText)
         val currentSession = chatRepository.getSessionOnce(sessionId)
         val shouldAutoRename = currentSession?.title?.startsWith("Chat") != false || currentSession?.title?.startsWith("Sesi") != false
         if (shouldAutoRename) {
