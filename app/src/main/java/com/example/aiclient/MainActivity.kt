@@ -153,6 +153,7 @@ private fun MainScreen(
     val scope = rememberCoroutineScope()
     val showSettings = rememberSaveable { mutableStateOf(false) }
     val chatListState = rememberLazyListState()
+    var inputText by remember { mutableStateOf("") }
 
     // Auto-scroll when new messages arrive
     LaunchedEffect(uiState.messages.size) {
