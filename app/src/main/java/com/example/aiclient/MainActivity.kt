@@ -227,7 +227,7 @@ private fun MainScreen(
                 )
 
                 ComposerBar(
-                    quickInput = uiState.prefs.quickInput,
+                    quickInput = uiState.currentInput,
                     onQuickInputChange = onQuickInputChange,
                     onSend = onSend,
                     isLoading = uiState.isLoading,

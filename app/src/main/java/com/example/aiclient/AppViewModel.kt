@@ -37,6 +37,7 @@ data class UiState(
     val responseMessage: String = "",
     val responseBody: String = "",
     val errorMessage: String = "",
+    val currentInput: String = "",
     val sessionSearchQuery: String = "",
 )
 
@@ -45,6 +46,7 @@ private data class CoreUiState(
     val sessions: List<SessionPreview>,
     val messages: List<MessageEntity>,
     val currentSessionId: String,
+    val currentInput: String,
 )
 
 private data class NetworkUiState(
@@ -66,6 +68,8 @@ class AppViewModel(
     private val responseBody = MutableStateFlow("")
     private val errorMessage = MutableStateFlow("")
     private val searchQuery = MutableStateFlow("")
+    // Local input state — no DataStore writes on every keystroke
+    private val currentInput = MutableStateFlow("")
 
     private val prefsFlow = settingsStore.prefsFlow
     private val sessionsFlow = chatRepository.observeSessions()
@@ -110,13 +114,14 @@ class AppViewModel(
         filteredSessionsFlow,
         messagesFlow,
         currentSessionIdFlow,
-        searchQuery,
-    ) { prefs, sessions, messages, currentSessionId, query ->
+        currentInput,
+    ) { prefs, sessions, messages, currentSessionId, input ->
         CoreUiState(
             prefs = prefs,
             sessions = sessions,
             messages = messages,
             currentSessionId = currentSessionId,
+            currentInput = input,
         )
     }
 
@@ -151,7 +156,8 @@ class AppViewModel(
             responseMessage = network.responseMessage,
             responseBody = network.responseBody,
             errorMessage = network.errorMessage,
-            sessionSearchQuery = network.isLoading.toString().takeIf { false } ?: "", // just placeholder
+            currentInput = core.currentInput,
+            sessionSearchQuery = searchQuery.value,
         )
     }.stateIn(
         viewModelScope,
@@ -184,14 +190,16 @@ class AppViewModel(
     fun updateBaseUrl(value: String) = persistPrefs { it.copy(baseUrl = value) }
     fun updateTemperature(value: Float) = persistPrefs { it.copy(temperature = value) }
     fun updateMaxTokens(value: Int) = persistPrefs { it.copy(maxTokens = value) }
+    fun updateGlobalMemory(value: String) = persistPrefs { it.copy(globalMemory = value) }
+
+    // --- Input (local state, no DataStore write) ---
+    fun updateQuickInput(value: String) { currentInput.value = value }
 
     // --- Legacy settings ---
     fun updateEndpointUrl(value: String) = persistPrefs { it.copy(endpointUrl = value) }
     fun updateMethod(value: String) = persistPrefs { it.copy(method = value) }
     fun updateHeaders(value: String) = persistPrefs { it.copy(defaultHeaders = value) }
     fun updateBodyTemplate(value: String) = persistPrefs { it.copy(bodyTemplate = value) }
-    fun updateQuickInput(value: String) = persistPrefs { it.copy(quickInput = value) }
-    fun updateGlobalMemory(value: String) = persistPrefs { it.copy(globalMemory = value) }
     fun updateActiveSession(sessionId: String) = persistPrefs { it.copy(activeSessionId = sessionId) }
     fun updateSessionSearch(value: String) { searchQuery.value = value }
 
@@ -227,11 +235,15 @@ class AppViewModel(
                 responseMessage.value = ""
                 responseBody.value = ""
 
+                val input = currentInput.value
                 val prefs = uiState.value.prefs
                 val session = ensureCurrentSession(prefs)
                 val history = chatRepository.getMessagesOnce(session.id)
 
-                val (headers, body) = buildRequest(prefs, history)
+                // Save input for rename
+                val inputForRename = input.take(28).trim()
+
+                val (headers, body) = buildRequest(prefs, history, input)
 
                 chatRepository.addMessage(session.id, "request", body)
 
@@ -243,24 +255,25 @@ class AppViewModel(
                         body = body,
                     )
                 }.onSuccess { result ->
-                    handleSuccess(session.id, result)
+                    handleSuccess(session.id, result, inputForRename)
                 }.onFailure { throwable ->
                     handleError(session.id, body, throwable)
                 }
             } finally {
+                currentInput.value = ""
                 loading.value = false
             }
         }
     }
 
-    private fun buildRequest(prefs: AppPrefs, history: List<MessageEntity>): Pair<String, String> {
+    private fun buildRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Pair<String, String> {
         if (prefs.apiKey.isNotBlank()) {
-            return buildAiRequest(prefs, history)
+            return buildAiRequest(prefs, history, input)
         }
-        return buildCustomRequest(prefs, history)
+        return buildCustomRequest(prefs, history, input)
     }
 
-    private fun buildAiRequest(prefs: AppPrefs, history: List<MessageEntity>): Pair<String, String> {
+    private fun buildAiRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Pair<String, String> {
         val headers = buildString {
             append("Content-Type: application/json\n")
             append("Authorization: Bearer ${prefs.apiKey}")
@@ -268,12 +281,10 @@ class AppViewModel(
 
         val messages = mutableListOf<String>()
 
-        // System prompt
         if (prefs.globalMemory.isNotBlank()) {
             messages.add("""{"role": "system", "content": ${prefs.globalMemory.toJsonString()}}""")
         }
 
-        // History messages
         for (msg in history) {
             val role = when (msg.role) {
                 "request" -> "user"
@@ -284,9 +295,8 @@ class AppViewModel(
             messages.add("""{"role": "${role}", "content": ${msg.content.toJsonString()}}""")
         }
 
-        // Current user input
-        if (prefs.quickInput.isNotBlank()) {
-            messages.add("""{"role": "user", "content": ${prefs.quickInput.toJsonString()}}""")
+        if (input.isNotBlank()) {
+            messages.add("""{"role": "user", "content": ${input.toJsonString()}}""")
         }
 
         val messagesJson = messages.joinToString(",\n")
@@ -305,11 +315,11 @@ class AppViewModel(
         return Pair(headers, body)
     }
 
-    private fun buildCustomRequest(prefs: AppPrefs, history: List<MessageEntity>): Pair<String, String> {
+    private fun buildCustomRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Pair<String, String> {
         val historyText = history.joinToString("\n\n") { "${it.role}: ${it.content}" }
         val renderedBody = apiClient.renderTemplate(
             template = prefs.bodyTemplate,
-            input = prefs.quickInput,
+            input = input,
             memory = prefs.globalMemory,
             history = historyText,
             model = prefs.model,
@@ -330,7 +340,7 @@ class AppViewModel(
         }
     }
 
-    private suspend fun handleSuccess(sessionId: String, result: ApiResult) {
+    private suspend fun handleSuccess(sessionId: String, result: ApiResult, inputForRename: String) {
         responseCode.value = result.statusCode
         responseMessage.value = result.statusMessage
         responseBody.value = result.responseBody
@@ -338,14 +348,9 @@ class AppViewModel(
         val currentSession = chatRepository.getSessionOnce(sessionId)
         val shouldAutoRename = currentSession?.title?.startsWith("Chat") != false || currentSession?.title?.startsWith("Sesi") != false
         if (shouldAutoRename) {
-            val newTitle = uiState.value.prefs.quickInput
-                .take(28)
-                .trim()
-                .ifBlank { "Chat ${sessionId.take(4)}" }
+            val newTitle = inputForRename.ifBlank { "Chat ${sessionId.take(4)}" }
             chatRepository.renameSession(sessionId, newTitle)
         }
-        // Clear quick input after sending
-        settingsStore.update { it.copy(quickInput = "") }
     }
 
     private suspend fun handleError(sessionId: String, renderedBody: String, throwable: Throwable) {
