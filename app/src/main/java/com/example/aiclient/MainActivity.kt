@@ -4,6 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -57,6 +59,7 @@ import com.example.aiclient.data.MessageEntity
 import com.example.aiclient.data.SessionEntity
 import com.example.aiclient.ui.AIClientTheme
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 import kotlinx.coroutines.delay
 
@@ -180,6 +183,7 @@ private fun AppScreen(
 
                     MessageTranscript(
                         messages = uiState.messages,
+                        isLoading = uiState.isLoading,
                         modifier = Modifier.weight(1f),
                         listState = chatListState,
                     )
@@ -268,6 +272,7 @@ private fun SessionStrip(
 @Composable
 private fun MessageTranscript(
     messages: List<MessageEntity>,
+    isLoading: Boolean,
     modifier: Modifier = Modifier,
     listState: LazyListState,
 ) {
@@ -309,6 +314,11 @@ private fun MessageTranscript(
                 items(messages, key = { it.id }) { message ->
                     ChatBubble(message = message)
                 }
+                if (isLoading) {
+                    item {
+                        TypingIndicatorBubble()
+                    }
+                }
             }
         }
     }
@@ -336,29 +346,65 @@ private fun ChatBubble(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart,
     ) {
+        AnimatedVisibility(
+            visible = true,
+            enter = fadeIn(animationSpec = tween(180)) +
+                androidx.compose.animation.slideInVertically(
+                    animationSpec = tween(180),
+                    initialOffsetY = { it / 3 },
+                ),
+        ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = containerColor),
+                shape = RoundedCornerShape(22.dp),
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = senderLabel,
+                        color = when {
+                            isError -> Color(0xFFFFA59A)
+                            isUser -> Color(0xFF7EE0D1)
+                            else -> Color(0xFFF4B860)
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = message.content,
+                        color = textColor,
+                    )
+                    Text(
+                        text = formatTimestamp(message.timestamp),
+                        color = Color(0xFF9FB4C7),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TypingIndicatorBubble() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Start,
+    ) {
         Card(
-            colors = CardDefaults.cardColors(containerColor = containerColor),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF122437)),
             shape = RoundedCornerShape(22.dp),
         ) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    text = senderLabel,
-                    color = when {
-                        isError -> Color(0xFFFFA59A)
-                        isUser -> Color(0xFF7EE0D1)
-                        else -> Color(0xFFF4B860)
-                    },
+                    text = "Assistant",
+                    color = Color(0xFFF4B860),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = message.content,
-                    color = textColor,
-                )
-                Text(
-                    text = formatTimestamp(message.timestamp),
+                    text = "Mengetik...",
                     color = Color(0xFF9FB4C7),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
         }
@@ -496,5 +542,10 @@ private fun MethodSelector(
 }
 
 private fun formatTimestamp(timestamp: Long): String {
-    return SimpleDateFormat("HH:mm", Locale.getDefault()).format(timestamp)
+    val now = Calendar.getInstance()
+    val value = Calendar.getInstance().apply { timeInMillis = timestamp }
+    val sameDay = now.get(Calendar.YEAR) == value.get(Calendar.YEAR) &&
+        now.get(Calendar.DAY_OF_YEAR) == value.get(Calendar.DAY_OF_YEAR)
+    val format = if (sameDay) "HH:mm" else "d MMM HH:mm"
+    return SimpleDateFormat(format, Locale.getDefault()).format(timestamp)
 }
