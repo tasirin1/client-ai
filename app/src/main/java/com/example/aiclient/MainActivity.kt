@@ -137,8 +137,8 @@ class MainActivity : ComponentActivity() {
                     onTestConnection = vm::testConnection,
                     connectionStatus = uiState.connectionStatus,
                     connectionError = uiState.connectionError,
-                    serverIp = serverIp,
-                    serverRunning = serverRunning,
+                    serverIp = serverIp.value,
+                    serverRunning = serverRunning.value,
                 )
             }
         }
