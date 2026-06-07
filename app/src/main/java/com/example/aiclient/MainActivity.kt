@@ -137,6 +137,8 @@ class MainActivity : ComponentActivity() {
                     onTestConnection = vm::testConnection,
                     connectionStatus = uiState.connectionStatus,
                     connectionError = uiState.connectionError,
+                    serverIp = serverIp.value,
+                    serverRunning = serverRunning.value,
                 )
             }
         }
@@ -162,6 +164,8 @@ private fun MainScreen(
     onTestConnection: () -> Unit,
     connectionStatus: ConnectionStatus,
     connectionError: String,
+    serverIp: String = "",
+    serverRunning: Boolean = false,
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()

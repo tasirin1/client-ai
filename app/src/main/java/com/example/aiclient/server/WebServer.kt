@@ -255,7 +255,12 @@ class WebServer(
 
     private fun getHtmlContent(): String {
         if (htmlCache == null) {
-            htmlCache = generateHtml()
+            try {
+                val inputStream = context.assets.open("web/index.html")
+                htmlCache = inputStream.bufferedReader().use { it.readText() }
+            } catch (e: Exception) {
+                htmlCache = "<html><body><h1>AI Client Web</h1><p>Server running</p></body></html>"
+            }
         }
         return htmlCache!!
     }
