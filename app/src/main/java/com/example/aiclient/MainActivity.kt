@@ -735,6 +735,8 @@ private fun SettingsDialog(
     onUpdateMaxTokens: (Int) -> Unit,
     onUpdateGlobalMemory: (String) -> Unit,
     onTestConnection: () -> Unit,
+    onBackup: () -> Unit,
+    onRestore: () -> Unit,
     connectionStatus: ConnectionStatus,
     connectionError: String,
     onDismiss: () -> Unit,
@@ -1082,6 +1084,28 @@ private fun SettingsDialog(
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
+
+                // Backup / Restore buttons
+                Text("Data", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = onBackup,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF10A37F)),
+                    ) {
+                        Text(" Backup", fontSize = 12.sp)
+                    }
+                    OutlinedButton(
+                        onClick = onRestore,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF6B6B)),
+                    ) {
+                        Text("Restore", fontSize = 12.sp)
+                    }
+                }
             }
         },
         confirmButton = {
@@ -1097,6 +1121,73 @@ private fun SettingsDialog(
             }
         },
     )
+}
+
+// --- Backup / Restore helpers ---
+import android.os.Environment
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+private suspend fun doBackup(vm: AppViewModel, ctx: android.content.Context) {
+    withContext(Dispatchers.IO) {
+        try {
+            val json = vm.createBackupJson()
+            val dateStr = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(Date())
+            val fileName = "ai-client-backup-$dateStr.json"
+
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                val contentValues = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, fileName)
+                    put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/json")
+                    put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
+                }
+                val uri = ctx.contentResolver.insert(
+                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    contentValues
+                )
+                if (uri != null) {
+                    ctx.contentResolver.openOutputStream(uri)?.use { out ->
+                        out.write(json.toByteArray(Charsets.UTF_8))
+                    }
+                    contentValues.clear()
+                    contentValues.put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
+                    ctx.contentResolver.update(uri, contentValues, null, null)
+                }
+            } else {
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val file = File(downloadsDir, fileName)
+                file.writeText(json, Charsets.UTF_8)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+}
+
+private suspend fun doRestore(vm: AppViewModel, ctx: android.content.Context) {
+    withContext(Dispatchers.IO) {
+        try {
+            // Read backup JSON from the intent URI (passed via onRestore)
+            // For direct file access, try reading from Downloads
+            val downloadsDir = if (android.os.Build.VERSION.SDK_INT >= 29) {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            } else {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            }
+            val files = downloadsDir.listFiles { f -> f.name.startsWith("ai-client-backup-") && f.name.endsWith(".json") }
+            if (files != null && files.isNotEmpty()) {
+                val latest = files.maxByOrNull { it.lastModified() } ?: return@withContext
+                val json = latest.readText(Charsets.UTF_8)
+                vm.restoreFromJson(json)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 }
 
 private fun formatMessageTime(timestamp: Long): String {

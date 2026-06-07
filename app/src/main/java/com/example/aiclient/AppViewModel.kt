@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.aiclient.data.AppPrefs
+import com.example.aiclient.data.BackupData
+import com.example.aiclient.data.BackupManager
 import com.example.aiclient.data.ChatRepository
 import com.example.aiclient.data.MessageEntity
 import com.example.aiclient.data.ProviderConfig
@@ -81,6 +83,7 @@ class AppViewModel(
     private val settingsStore: SettingsStore,
     private val chatRepository: ChatRepository,
     private val apiClient: GenericApiClient,
+    private val backupManager: BackupManager,
 ) : ViewModel() {
     private val loading = MutableStateFlow(false)
     private val responseCode = MutableStateFlow<Int?>(null)
@@ -669,6 +672,25 @@ class AppViewModel(
             val newProviderConfigs = setProviderConfig(updated, updated.apiProvider, config)
             settingsStore.update { updated.copy(providerConfigs = newProviderConfigs) }
         }
+    }
+
+    // --- Backup / Restore ---
+    fun createBackupData(): BackupData? {
+        var result: BackupData? = null
+        viewModelScope.launch {
+            result = backupManager.createBackup()
+        }
+        return result
+    }
+
+    suspend fun createBackupJson(): String {
+        val backup = backupManager.createBackup()
+        return backupManager.serialize(backup)
+    }
+
+    suspend fun restoreFromJson(jsonString: String): Boolean {
+        val backup = backupManager.deserialize(jsonString) ?: return false
+        return backupManager.restore(backup)
     }
 
     companion object {

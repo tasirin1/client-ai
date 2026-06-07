@@ -81,4 +81,16 @@ class ChatRepository(
         chatDao.deleteMessagesBySession(sessionId)
         chatDao.deleteSession(sessionId)
     }
+
+    // --- Backup / Restore ---
+    suspend fun getAllSessionsOnce(): List<SessionEntity> = chatDao.getAllSessionsOnce()
+
+    suspend fun getAllMessagesOnce(): List<MessageEntity> = chatDao.getAllMessagesOnce()
+
+    suspend fun restoreAll(sessions: List<SessionEntity>, messages: List<MessageEntity>) {
+        chatDao.deleteAllSessions()
+        chatDao.deleteAllMessages()
+        if (sessions.isNotEmpty()) chatDao.insertSessions(sessions)
+        if (messages.isNotEmpty()) chatDao.insertMessages(messages)
+    }
 }

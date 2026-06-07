@@ -37,4 +37,22 @@ interface ChatDao {
 
     @Query("SELECT * FROM messages WHERE sessionId = :sessionId AND createdAt = (SELECT MAX(createdAt) FROM messages WHERE sessionId = :sessionId)")
     suspend fun getLastMessage(sessionId: String): MessageEntity?
+
+    @Query("SELECT * FROM sessions ORDER BY updatedAt DESC")
+    suspend fun getAllSessionsOnce(): List<SessionEntity>
+
+    @Query("SELECT * FROM messages ORDER BY createdAt ASC")
+    suspend fun getAllMessagesOnce(): List<MessageEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSessions(sessions: List<SessionEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMessages(messages: List<MessageEntity>)
+
+    @Query("DELETE FROM sessions")
+    suspend fun deleteAllSessions()
+
+    @Query("DELETE FROM messages")
+    suspend fun deleteAllMessages()
 }
