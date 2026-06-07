@@ -727,12 +727,14 @@ private fun SettingsDialog(
     connectionError: String,
     onDismiss: () -> Unit,
 ) {
-    val providers = listOf("OpenAI", "Anthropic", "Google", "Deepseek", "Custom")
+    val providers = listOf("OpenAI", "Anthropic", "Google", "Deepseek", "Groq", "OpenRouter", "Custom")
     val modelsByProvider = mapOf(
         "OpenAI" to listOf("gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1", "o1-mini", "o3-mini"),
         "Anthropic" to listOf("claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"),
         "Google" to listOf("gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.0-pro"),
         "Deepseek" to listOf("deepseek-chat", "deepseek-reasoner"),
+        "Groq" to listOf("gemma2-9b-it", "mixtral-8x7b-32768", "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama-guard-3-8b", "llama3-70b-8192", "llama3-8b-8192", "deepseek-r1-distill-llama-70b"),
+        "OpenRouter" to listOf("openai/gpt-4o", "openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "google/gemini-2.0-flash", "meta-llama/llama-3.3-70b-instruct", "deepseek/deepseek-r1", "mistralai/mistral-small-24b-instruct"),
         "Custom" to emptyList(),
     )
     val baseUrls = mapOf(
@@ -740,6 +742,8 @@ private fun SettingsDialog(
         "Anthropic" to "https://api.anthropic.com/v1/messages",
         "Google" to "https://generativelanguage.googleapis.com/v1beta/models",
         "Deepseek" to "https://api.deepseek.com/v1/chat/completions",
+        "Groq" to "https://api.groq.com/openai/v1/chat/completions",
+        "OpenRouter" to "https://openrouter.ai/api/v1/chat/completions",
         "Custom" to prefs.baseUrl,
     )
 
