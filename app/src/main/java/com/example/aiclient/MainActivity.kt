@@ -116,9 +116,16 @@ class MainActivity : ComponentActivity() {
                 val serverIp = remember { mutableStateOf("") }
                 val serverRunning = remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) {
-                    webServer.start()
-                    serverRunning.value = webServer.isRunning
                     serverIp.value = webServer.getLocalIp() + ":8080"
+                }
+                fun toggleServer() {
+                    if (webServer.isRunning) {
+                        webServer.stop()
+                        serverRunning.value = false
+                    } else {
+                        webServer.start()
+                        serverRunning.value = true
+                    }
                 }
                 MainScreen(
                     uiState = uiState,
@@ -139,6 +146,7 @@ class MainActivity : ComponentActivity() {
                     connectionError = uiState.connectionError,
                     serverIp = serverIp.value,
                     serverRunning = serverRunning.value,
+                    onToggleServer = ::toggleServer,
                 )
             }
         }
@@ -166,6 +174,7 @@ private fun MainScreen(
     connectionError: String,
     serverIp: String = "",
     serverRunning: Boolean = false,
+    onToggleServer: () -> Unit = {},
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -205,6 +214,7 @@ private fun MainScreen(
                     onOpenSettings = { showSettings.value = true },
                     serverIp = serverIp,
                     serverRunning = serverRunning,
+                    onToggleServer = onToggleServer,
                 )
             }
         },
@@ -293,6 +303,7 @@ private fun SessionSidebar(
     onOpenSettings: () -> Unit,
     serverIp: String = "",
     serverRunning: Boolean = false,
+    onToggleServer: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -399,6 +410,7 @@ private fun SessionSidebar(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 2.dp)
+                .clickable { onToggleServer() }
                 .background(Color(0xFF1E1E1E), RoundedCornerShape(10.dp))
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
@@ -412,7 +424,7 @@ private fun SessionSidebar(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Web Access",
+                        if (serverRunning) "Web Access" else "Web Access (Off)",
                         color = if (serverRunning) Color(0xFFE0E0E0) else Color(0xFF666666),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
