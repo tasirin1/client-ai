@@ -6,8 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.aiclient.data.AppPrefs
 import com.example.aiclient.data.ChatRepository
 import com.example.aiclient.data.MessageEntity
+import com.example.aiclient.data.ProviderConfig
 import com.example.aiclient.data.SessionEntity
 import com.example.aiclient.data.SettingsStore
+import com.example.aiclient.data.getDefaultBaseUrl
+import com.example.aiclient.data.getDefaultModel
+import com.example.aiclient.data.getProviderConfig
+import com.example.aiclient.data.setProviderConfig
 import com.example.aiclient.network.ApiResult
 import com.example.aiclient.network.GenericApiClient
 import com.example.aiclient.network.toJsonString
@@ -76,7 +81,6 @@ class AppViewModel(
     private val settingsStore: SettingsStore,
     private val chatRepository: ChatRepository,
     private val apiClient: GenericApiClient,
-    private val termuxBridge: com.example.aiclient.termux.TermuxBridge,
 ) : ViewModel() {
     private val loading = MutableStateFlow(false)
     private val responseCode = MutableStateFlow<Int?>(null)
@@ -203,14 +207,42 @@ class AppViewModel(
         settingsStore.update { it.copy(activeSessionId = session.id) }
     }
 
-    // --- AI Chat settings ---
-    fun updateApiKey(value: String) = persistPrefs { it.copy(apiKey = value) }
-    fun updateProvider(value: String) = persistPrefs { it.copy(apiProvider = value) }
-    fun updateModel(value: String) = persistPrefs { it.copy(model = value) }
-    fun updateBaseUrl(value: String) = persistPrefs { it.copy(baseUrl = value) }
-    fun updateTemperature(value: Float) = persistPrefs { it.copy(temperature = value) }
-    fun updateMaxTokens(value: Int) = persistPrefs { it.copy(maxTokens = value) }
+    // --- AI Chat settings (per-provider) ---
+    fun updateApiKey(value: String) = persistPrefsWithProvider { it.copy(apiKey = value) }
+    fun updateModel(value: String) = persistPrefsWithProvider { it.copy(model = value) }
+    fun updateBaseUrl(value: String) = persistPrefsWithProvider { it.copy(baseUrl = value) }
+    fun updateTemperature(value: Float) = persistPrefsWithProvider { it.copy(temperature = value) }
+    fun updateMaxTokens(value: Int) = persistPrefsWithProvider { it.copy(maxTokens = value) }
     fun updateGlobalMemory(value: String) = persistPrefs { it.copy(globalMemory = value) }
+    
+    fun updateProvider(value: String) {
+        viewModelScope.launch {
+            val prefs = settingsStore.prefsFlow.first()
+            // Save current provider's config
+            val currentConfig = ProviderConfig(
+                apiKey = prefs.apiKey,
+                model = prefs.model,
+                baseUrl = prefs.baseUrl,
+                temperature = prefs.temperature,
+                maxTokens = prefs.maxTokens,
+            )
+            val configsSaved = setProviderConfig(prefs, prefs.apiProvider, currentConfig)
+            
+            // Load new provider's config
+            val updatedPrefs = prefs.copy(providerConfigs = configsSaved)
+            val newConfig = getProviderConfig(updatedPrefs, value)
+            settingsStore.update {
+                updatedPrefs.copy(
+                    apiProvider = value,
+                    apiKey = newConfig.apiKey,
+                    model = newConfig.model.ifEmpty { getDefaultModel(value) },
+                    baseUrl = newConfig.baseUrl.ifEmpty { getDefaultBaseUrl(value) },
+                    temperature = newConfig.temperature,
+                    maxTokens = newConfig.maxTokens,
+                )
+            }
+        }
+    }
 
     // --- Legacy settings ---
     fun updateEndpointUrl(value: String) = persistPrefs { it.copy(endpointUrl = value) }
@@ -221,55 +253,6 @@ class AppViewModel(
     fun updateSessionSearch(value: String) { searchQuery.value = value }
 
     // --- Test Connection ---
-    // --- Session management ---
-    fun isTermuxInstalled(): Boolean = termuxBridge.isTermuxInstalled()
-
-    fun executeInTermux(command: String) {
-        viewModelScope.launch {
-            try {
-                errorMessage.value = ""
-                responseCode.value = null
-                responseMessage.value = ""
-                responseBody.value = ""
-
-                val sessionId = uiState.value.currentSessionId
-                val session = if (sessionId.isNotBlank()) {
-                    chatRepository.getSessionOnce(sessionId)
-                } else null
-
-                val targetSession = session ?: chatRepository.createSession("Terminal")
-                if (session == null) {
-                    settingsStore.update { it.copy(activeSessionId = targetSession.id) }
-                }
-
-                chatRepository.addMessage(targetSession.id, "request", "$ $command")
-                loading.value = true
-
-                val result = termuxBridge.executeCommand(command)
-                val output = buildString {
-                    if (result.stdout.isNotBlank()) append(result.stdout.trimEnd()).append("\n")
-                    if (result.stderr.isNotBlank()) append(result.stderr.trimEnd()).append("\n")
-                    append("Exit code: ${result.exitCode}")
-                }.trimEnd()
-
-                chatRepository.addMessage(targetSession.id, "response", output.ifBlank { "(no output)" })
-                responseBody.value = output
-
-                val currentSession = chatRepository.getSessionOnce(targetSession.id)
-                if (currentSession?.title?.startsWith("Chat") != false || currentSession?.title?.startsWith("Terminal") != false) {
-                    chatRepository.renameSession(targetSession.id, command.take(28).trim().ifBlank { "Terminal" })
-                }
-            } catch (e: Exception) {
-                val msg = e.message ?: "Unknown error"
-                val sid = uiState.value.currentSessionId
-                if (sid.isNotBlank()) chatRepository.addMessage(sid, "error", "Error: $msg")
-                errorMessage.value = msg
-            } finally {
-                loading.value = false
-            }
-        }
-    }
-
     fun testConnection() {
         viewModelScope.launch {
             connectionStatus.value = ConnectionStatus.TESTING
@@ -650,6 +633,23 @@ class AppViewModel(
         }
     }
 
+    private fun persistPrefsWithProvider(transform: (AppPrefs) -> AppPrefs) {
+        viewModelScope.launch {
+            val prefs = settingsStore.prefsFlow.first()
+            val updated = transform(prefs)
+            // Save to per-provider config as well
+            val config = ProviderConfig(
+                apiKey = updated.apiKey,
+                model = updated.model,
+                baseUrl = updated.baseUrl,
+                temperature = updated.temperature,
+                maxTokens = updated.maxTokens,
+            )
+            val newProviderConfigs = setProviderConfig(updated, updated.apiProvider, config)
+            settingsStore.update { updated.copy(providerConfigs = newProviderConfigs) }
+        }
+    }
+
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory {
             return object : ViewModelProvider.Factory {
@@ -659,7 +659,7 @@ class AppViewModel(
                         settingsStore = container.settingsStore,
                         chatRepository = container.chatRepository,
                         apiClient = container.apiClient,
-                        termuxBridge = container.termuxBridge,
+
                     ) as T
                 }
             }

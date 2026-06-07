@@ -30,6 +30,7 @@ class SettingsStore(private val context: Context) {
         val baseUrl = stringPreferencesKey("base_url")
         val temperature = floatPreferencesKey("temperature")
         val maxTokens = intPreferencesKey("max_tokens")
+        val providerConfigs = stringPreferencesKey("provider_configs")
     }
 
     val prefsFlow: Flow<AppPrefs> = dataStore.data.map { prefs ->
@@ -53,6 +54,7 @@ class SettingsStore(private val context: Context) {
             prefs[Keys.baseUrl] = updated.baseUrl
             prefs[Keys.temperature] = updated.temperature
             prefs[Keys.maxTokens] = updated.maxTokens
+            prefs[Keys.providerConfigs] = updated.providerConfigs
         }
     }
 
@@ -71,6 +73,7 @@ class SettingsStore(private val context: Context) {
             baseUrl = this[Keys.baseUrl] ?: AppPrefs().baseUrl,
             temperature = this[Keys.temperature] ?: AppPrefs().temperature,
             maxTokens = this[Keys.maxTokens] ?: AppPrefs().maxTokens,
+            providerConfigs = this[Keys.providerConfigs] ?: AppPrefs().providerConfigs,
         )
     }
 }
