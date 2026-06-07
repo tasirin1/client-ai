@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -128,6 +129,8 @@ class MainActivity : ComponentActivity() {
                     onTestConnection = vm::testConnection,
                     connectionStatus = uiState.connectionStatus,
                     connectionError = uiState.connectionError,
+                    onRunCommand = vm::executeInTermux,
+                    isTermuxInstalled = remember { vm.isTermuxInstalled() },
                 )
             }
         }
@@ -153,12 +156,15 @@ private fun MainScreen(
     onTestConnection: () -> Unit,
     connectionStatus: ConnectionStatus,
     connectionError: String,
+    onRunCommand: (String) -> Unit = {},
+    isTermuxInstalled: Boolean = false,
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val showSettings = rememberSaveable { mutableStateOf(false) }
     val chatListState = rememberLazyListState()
     var inputText by remember { mutableStateOf("") }
+    var terminalMode by remember { mutableStateOf(false) }
 
     // Auto-scroll when new messages arrive
     LaunchedEffect(uiState.messages.size) {
@@ -241,8 +247,18 @@ private fun MainScreen(
                 ComposerBar(
                     quickInput = inputText,
                     onQuickInputChange = { inputText = it },
-                    onSend = { onSend(inputText); inputText = "" },
+                    onSend = { text ->
+                        if (terminalMode) {
+                            onRunCommand(text)
+                        } else {
+                            onSend(text)
+                        }
+                        inputText = ""
+                    },
                     isLoading = uiState.isLoading,
+                    terminalMode = terminalMode,
+                    onToggleTerminal = { terminalMode = !terminalMode },
+                    isTermuxInstalled = isTermuxInstalled,
                 )
             }
         }
@@ -649,6 +665,9 @@ private fun ComposerBar(
     onQuickInputChange: (String) -> Unit,
     onSend: (String) -> Unit,
     isLoading: Boolean,
+    terminalMode: Boolean = false,
+    onToggleTerminal: () -> Unit = {},
+    isTermuxInstalled: Boolean = false,
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     Card(
@@ -659,21 +678,44 @@ private fun ComposerBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
+            // Terminal toggle button
+            if (isTermuxInstalled) {
+                IconButton(
+                    onClick = onToggleTerminal,
+                    modifier = Modifier.size(36.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Terminal,
+                        contentDescription = "Terminal",
+                        tint = if (terminalMode) Color(0xFF10A37F) else Color(0xFF555555),
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+
             OutlinedTextField(
                 value = quickInput,
                 onValueChange = onQuickInputChange,
-                placeholder = { Text("Ketik pesan...", color = Color(0xFF666666)) },
+                placeholder = {
+                    Text(
+                        if (terminalMode) "Ketik command..." else "Ketik pesan...",
+                        color = Color(0xFF666666),
+                    )
+                },
                 modifier = Modifier.weight(1f),
                 minLines = 1,
                 maxLines = 6,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFFE0E0E0)),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = if (terminalMode) Color(0xFF10A37F) else Color(0xFFE0E0E0),
+                ),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF10A37F),
+                    focusedBorderColor = if (terminalMode) Color(0xFF10A37F) else Color(0xFF10A37F),
                     unfocusedBorderColor = Color(0xFF333333),
-                    cursorColor = Color(0xFF10A37F),
+                    cursorColor = if (terminalMode) Color(0xFF10A37F) else Color(0xFF10A37F),
                     focusedContainerColor = Color(0xFF121212),
                     unfocusedContainerColor = Color(0xFF121212),
                 ),
@@ -695,7 +737,7 @@ private fun ComposerBar(
                 enabled = !isLoading && quickInput.isNotBlank(),
                 shape = CircleShape,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF10A37F),
+                    containerColor = if (terminalMode) Color(0xFF2D6A4F) else Color(0xFF10A37F),
                     contentColor = Color.White,
                     disabledContainerColor = Color(0xFF333333),
                 ),
@@ -703,8 +745,8 @@ private fun ComposerBar(
                 contentPadding = PaddingValues(0.dp),
             ) {
                 Icon(
-                    Icons.Default.Send,
-                    contentDescription = "Kirim",
+                    if (terminalMode) Icons.Default.Terminal else Icons.Default.Send,
+                    contentDescription = if (terminalMode) "Run" else "Kirim",
                     modifier = Modifier.size(20.dp),
                 )
             }

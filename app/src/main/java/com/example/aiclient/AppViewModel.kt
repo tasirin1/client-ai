@@ -76,6 +76,7 @@ class AppViewModel(
     private val settingsStore: SettingsStore,
     private val chatRepository: ChatRepository,
     private val apiClient: GenericApiClient,
+    private val termuxBridge: com.example.aiclient.termux.TermuxBridge,
 ) : ViewModel() {
     private val loading = MutableStateFlow(false)
     private val responseCode = MutableStateFlow<Int?>(null)
@@ -221,6 +222,53 @@ class AppViewModel(
 
     // --- Test Connection ---
     // --- Session management ---
+    fun isTermuxInstalled(): Boolean = termuxBridge.isTermuxInstalled()
+
+    fun executeInTermux(command: String) {
+        viewModelScope.launch {
+            try {
+                errorMessage.value = ""
+                responseCode.value = null
+                responseMessage.value = ""
+                responseBody.value = ""
+
+                val sessionId = uiState.value.currentSessionId
+                val session = if (sessionId.isNotBlank()) {
+                    chatRepository.getSessionOnce(sessionId)
+                } else null
+
+                val targetSession = session ?: chatRepository.createSession("Terminal")
+                if (session == null) {
+                    settingsStore.update { it.copy(activeSessionId = targetSession.id) }
+                }
+
+                chatRepository.addMessage(targetSession.id, "request", "$ $command")
+                loading.value = true
+
+                val result = termuxBridge.executeCommand(command)
+                val output = buildString {
+                    if (result.stdout.isNotBlank()) append(result.stdout.trimEnd()).append("\n")
+                    if (result.stderr.isNotBlank()) append(result.stderr.trimEnd()).append("\n")
+                    append("Exit code: ${result.exitCode}")
+                }.trimEnd()
+
+                chatRepository.addMessage(targetSession.id, "response", output.ifBlank { "(no output)" })
+                responseBody.value = output
+
+                val currentSession = chatRepository.getSessionOnce(targetSession.id)
+                if (currentSession?.title?.startsWith("Chat") != false || currentSession?.title?.startsWith("Terminal") != false) {
+                    chatRepository.renameSession(targetSession.id, command.take(28).trim().ifBlank { "Terminal" })
+                }
+            } catch (e: Exception) {
+                val msg = e.message ?: "Unknown error"
+                val sid = uiState.value.currentSessionId
+                if (sid.isNotBlank()) chatRepository.addMessage(sid, "error", "Error: $msg")
+                errorMessage.value = msg
+            } finally {
+                loading.value = false
+            }
+        }
+    }
 
     fun testConnection() {
         viewModelScope.launch {
@@ -611,6 +659,7 @@ class AppViewModel(
                         settingsStore = container.settingsStore,
                         chatRepository = container.chatRepository,
                         apiClient = container.apiClient,
+                        termuxBridge = container.termuxBridge,
                     ) as T
                 }
             }
