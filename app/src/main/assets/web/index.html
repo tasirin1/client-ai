@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Client Web</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#121212;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;height:100vh;display:flex;overflow:hidden}
+/* Sidebar */
+#sidebar{width:280px;background:#161616;display:flex;flex-direction:column;border-right:1px solid #222;flex-shrink:0}
+#sidebar-header{padding:12px;border-bottom:1px solid #222}
+#sidebar-header button{width:100%;padding:10px;background:#10a37f;color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+#sidebar-header button:hover{background:#0d8b6c}
+#session-list{flex:1;overflow-y:auto;padding:4px}
+.session-item{padding:10px 12px;cursor:pointer;border-radius:8px;margin:2px 0;position:relative}
+.session-item:hover{background:#1e1e1e}
+.session-item.active{background:#2a2a2a}
+.session-item .title{font-size:13px;color:#e0e0e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.session-item .preview{font-size:11px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.session-item .del-btn{position:absolute;right:8px;top:8px;background:none;border:none;color:#666;cursor:pointer;display:none;font-size:14px;padding:2px 6px;border-radius:4px}
+.session-item:hover .del-btn{display:block}
+.session-item .del-btn:hover{background:#3d1a1a;color:#ef9a9a}
+#sidebar-footer{padding:8px;border-top:1px solid #222}
+#sidebar-footer .info{font-size:11px;color:#555;text-align:center}
+
+/* Main */
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#chat-header{padding:12px 16px;background:#161616;border-bottom:1px solid #222;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+#chat-header .session-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px}
+.msg{max-width:80%;padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.5;animation:fadeIn .3s}
+.msg.user{align-self:flex-end;background:#1e3a3a;border-bottom-right-radius:4px}
+.msg.assistant{align-self:flex-start;background:#1e1e1e;border-bottom-left-radius:4px}
+.msg.error{align-self:flex-start;background:#3d1a1a;color:#ef9a9a}
+.msg .time{font-size:10px;color:#666;margin-top:4px;text-align:right}
+.msg .copy-btn{background:none;border:none;color:#555;cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px;margin-top:4px;float:right}
+.msg .copy-btn:hover{background:#333;color:#aaa}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+#empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#555;gap:8px}
+#empty-state .icon{font-size:48px}
+#empty-state .sub{font-size:13px}
+
+/* Input */
+#input-bar{background:#1a1a1a;border-top:1px solid #222;padding:12px 16px}
+#input-row{display:flex;gap:8px;align-items:flex-end}
+#input-row textarea{flex:1;background:#121212;border:1px solid #333;border-radius:12px;padding:10px 14px;color:#e0e0e0;font-size:14px;font-family:inherit;resize:none;max-height:120px;outline:none}
+#input-row textarea:focus{border-color:#10a37f}
+#input-row button{width:44px;height:44px;border-radius:50%;background:#10a37f;color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+#input-row button:disabled{background:#333;cursor:default}
+#input-row button:not(:disabled):hover{background:#0d8b6c}
+#input-row button svg{width:20px;height:20px;fill:currentColor}
+
+/* Loading */
+#loading{display:none;align-items:center;gap:8px;padding:8px 16px;color:#888;font-size:13px}
+#loading.show{display:flex}
+.spinner{width:16px;height:16px;border:2px solid #333;border-top-color:#10a37f;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Hamburger for mobile */
+#hamburger{display:none;background:none;border:none;color:#e0e0e0;cursor:pointer;padding:4px;margin-right:8px}
+#hamburger svg{width:24px;height:24px;fill:currentColor}
+@media(max-width:768px){
+  #sidebar{position:fixed;left:-280px;z-index:1000;height:100%;transition:left .3s}
+  #sidebar.open{left:0}
+  #hamburger{display:block}
+  #overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999}
+  #overlay.show{display:block}
+}
+</style>
+</head>
+<body>
+<div id="overlay" onclick="closeSidebar()"></div>
+<aside id="sidebar">
+  <div id="sidebar-header">
+    <button onclick="newSession()">+ Chat Baru</button>
+  </div>
+  <div id="session-list"></div>
+  <div id="sidebar-footer">
+    <div class="info">AI Client Web · <span id="ip-display">0.0.0.0:8080</span></div>
+  </div>
+</aside>
+<main id="main">
+  <div id="chat-header">
+    <button id="hamburger" onclick="toggleSidebar()">
+      <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+    </button>
+    <span class="session-title" id="session-title">AI Client</span>
+  </div>
+  <div id="messages">
+    <div id="empty-state">
+      <div class="icon">👋</div>
+      <div>Mulai chat baru</div>
+      <div class="sub">Pilih sesi atau buat baru untuk memulai</div>
+    </div>
+  </div>
+  <div id="loading" class="show">
+    <div class="spinner"></div>
+    <span>AI sedang mengetik...</span>
+  </div>
+  <div id="input-bar">
+    <div id="input-row">
+      <textarea id="input" rows="1" placeholder="Ketik pesan..." onkeydown="onKeyDown(event)"></textarea>
+      <button id="send-btn" onclick="sendMessage()" disabled>
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+</main>
+<script>
+let sessions = [];
+let activeSessionId = '';
+let isLoading = false;
+
+async function api(url, opts = {}) {
+  const resp = await fetch(url, opts);
+  return resp.json();
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function escapeJson(s) {
+  return s.replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\n/g,'\\n');
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('show');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+async function loadSessions() {
+  const data = await api('/api/sessions');
+  sessions = data;
+  renderSessions();
+}
+
+function renderSessions() {
+  const list = document.getElementById('session-list');
+  list.innerHTML = '';
+  sessions.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'session-item' + (s.id === activeSessionId ? ' active' : '');
+    div.innerHTML = `
+      <div class="title">${escHtml(s.title)}</div>
+      <div class="preview">${escHtml(s.lastMessage || '')}</div>
+      <button class="del-btn" onclick="event.stopPropagation();deleteSession('${s.id}')">✕</button>
+    `;
+    div.onclick = () => selectSession(s.id);
+    list.appendChild(div);
+  });
+}
+
+async function selectSession(id) {
+  closeSidebar();
+  activeSessionId = id;
+  renderSessions();
+  document.getElementById('session-title').textContent = sessions.find(s => s.id === id)?.title || 'AI Client';
+  const data = await api('/api/messages?sessionId=' + id);
+  renderMessages(data);
+}
+
+async function newSession() {
+  closeSidebar();
+  const data = await api('/api/session/new', { method: 'POST' });
+  activeSessionId = data.id;
+  await loadSessions();
+  document.getElementById('session-title').textContent = 'Chat Baru';
+  document.getElementById('messages').innerHTML = '<div id="empty-state"><div class="icon">👋</div><div>Mulai chat baru</div><div class="sub">Ketik pesan untuk memulai</div></div>';
+}
+
+async function deleteSession(id) {
+  if (!confirm('Hapus sesi ini?')) return;
+  await api('/api/session/delete', { method: 'POST', body: JSON.stringify({ sessionId: id }), headers: {'Content-Type':'application/json'} });
+  if (id === activeSessionId) {
+    activeSessionId = '';
+    document.getElementById('session-title').textContent = 'AI Client';
+    document.getElementById('messages').innerHTML = '<div id="empty-state"><div class="icon">👋</div><div>Mulai chat baru</div><div class="sub">Pilih sesi atau buat baru untuk memulai</div></div>';
+  }
+  await loadSessions();
+}
+
+function renderMessages(msgs) {
+  const container = document.getElementById('messages');
+  container.innerHTML = '';
+  if (!msgs || msgs.length === 0) {
+    container.innerHTML = '<div id="empty-state"><div class="icon">👋</div><div>Mulai chat baru</div><div class="sub">Ketik pesan untuk memulai</div></div>';
+    return;
+  }
+  msgs.forEach(m => {
+    const div = document.createElement('div');
+    const role = m.role === 'request' ? 'user' : 'error';
+    div.className = 'msg' + (role === 'user' ? ' user' : role === 'error' ? ' error' : ' assistant');
+    const time = new Date(m.createdAt).toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
+    div.innerHTML = escHtml(m.content) + '<div class="time">' + time + '</div>';
+    if (role !== 'user' && role !== 'error') {
+      div.innerHTML += '<button class="copy-btn" onclick="copyText(this)">Salin</button>';
+    }
+    container.appendChild(div);
+  });
+  container.scrollTop = container.scrollHeight;
+}
+
+function copyText(btn) {
+  const text = btn.parentElement.childNodes[0].textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Tersalin!';
+    setTimeout(() => btn.textContent = 'Salin', 2000);
+  });
+}
+
+function onKeyDown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+const input = document.getElementById('input');
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  document.getElementById('send-btn').disabled = !input.value.trim() || isLoading;
+});
+
+async function sendMessage() {
+  const text = input.value.trim();
+  if (!text || isLoading) return;
+  input.value = '';
+  input.style.height = 'auto';
+  document.getElementById('send-btn').disabled = true;
+
+  isLoading = true;
+  document.getElementById('loading').classList.add('show');
+
+  // Add user message immediately
+  const container = document.getElementById('messages');
+  const empty = document.getElementById('empty-state');
+  if (empty) empty.parentElement.removeChild(empty);
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg user';
+  userDiv.innerHTML = escHtml(text) + '<div class="time">' + new Date().toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'}) + '</div>';
+  container.appendChild(userDiv);
+  container.scrollTop = container.scrollHeight;
+
+  try {
+    const data = await api('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: text, sessionId: activeSessionId }),
+      headers: {'Content-Type':'application/json'}
+    });
+    if (data.sessionId) activeSessionId = data.sessionId;
+    await loadSessions();
+    document.getElementById('session-title').textContent = sessions.find(s => s.id === activeSessionId)?.title || 'AI Client';
+
+    const aiDiv = document.createElement('div');
+    aiDiv.className = 'msg assistant';
+    aiDiv.innerHTML = escHtml(data.response) + '<div class="time">' + new Date().toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'}) + '</div><button class="copy-btn" onclick="copyText(this)">Salin</button>';
+    container.appendChild(aiDiv);
+    container.scrollTop = container.scrollHeight;
+  } catch (e) {
+    const errDiv = document.createElement('div');
+    errDiv.className = 'msg error';
+    errDiv.textContent = 'Error: ' + e.message;
+    container.appendChild(errDiv);
+  } finally {
+    isLoading = false;
+    document.getElementById('loading').classList.remove('show');
+    document.getElementById('send-btn').disabled = !input.value.trim();
+  }
+}
+
+// Init
+(async function() {
+  try {
+    const status = await api('/api/status');
+    document.getElementById('ip-display').textContent = status.ip + ':' + status.port;
+  } catch(e) {}
+  await loadSessions();
+  if (sessions.length > 0) {
+    await selectSession(sessions[0].id);
+  }
+})();
+</script>
+</body>
+</html>

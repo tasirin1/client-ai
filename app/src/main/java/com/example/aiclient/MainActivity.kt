@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -111,6 +112,14 @@ class MainActivity : ComponentActivity() {
             AIClientTheme {
                 val vm: AppViewModel = viewModel(factory = AppViewModel.factory(container))
                 val uiState by vm.uiState.collectAsState()
+                val webServer = container.webServer
+                val serverIp = remember { mutableStateOf("") }
+                val serverRunning = remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    webServer.start()
+                    serverRunning.value = webServer.isRunning
+                    serverIp.value = webServer.getLocalIp() + ":8080"
+                }
                 MainScreen(
                     uiState = uiState,
                     onCreateSession = vm::createSession,
@@ -190,6 +199,8 @@ private fun MainScreen(
                     },
                     onDeleteSession = onDeleteSession,
                     onOpenSettings = { showSettings.value = true },
+                    serverIp = serverIp.value,
+                    serverRunning = serverRunning.value,
                 )
             }
         },
@@ -276,6 +287,8 @@ private fun SessionSidebar(
     onSelectSession: (String) -> Unit,
     onDeleteSession: (String) -> Unit,
     onOpenSettings: () -> Unit,
+    serverIp: String = "",
+    serverRunning: Boolean = false,
 ) {
     Column(
         modifier = Modifier
@@ -374,6 +387,48 @@ private fun SessionSidebar(
                         )
                     }
                 }
+            }
+        }
+
+        // Web Access button
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .background(Color(0xFF1E1E1E), RoundedCornerShape(10.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Wifi,
+                    contentDescription = "Web",
+                    tint = if (serverRunning) Color(0xFF10A37F) else Color(0xFF555555),
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Web Access",
+                        color = if (serverRunning) Color(0xFFE0E0E0) else Color(0xFF666666),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    if (serverRunning && serverIp.isNotBlank()) {
+                        Text(
+                            "http://$serverIp",
+                            color = Color(0xFF10A37F),
+                            fontSize = 11.sp,
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(
+                            if (serverRunning) Color(0xFF10A37F) else Color(0xFF555555),
+                            CircleShape,
+                        ),
+                )
             }
         }
 
