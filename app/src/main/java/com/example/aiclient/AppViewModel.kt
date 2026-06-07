@@ -608,6 +608,26 @@ class AppViewModel(
     private suspend fun handleSuccess(sessionId: String, result: ApiResult, inputForRename: String) {
         responseCode.value = result.statusCode
         responseMessage.value = result.statusMessage
+
+        // Check for API errors (non-2xx status)
+        if (result.statusCode >= 400) {
+            val errorPreview = try {
+                val json = JSONObject(result.responseBody)
+                val err = json.optJSONObject("error")
+                if (err != null) {
+                    err.optString("message", json.optString("message", result.responseBody))
+                } else {
+                    json.optString("message", result.responseBody)
+                }
+            } catch (_: Exception) { result.responseBody }
+            val cleanError = errorPreview.take(300).replace("\n", " ")
+            val msg = "HTTP ${result.statusCode}: ${cleanError}"
+            errorMessage.value = msg
+            responseBody.value = result.responseBody
+            chatRepository.addMessage(sessionId, "error", msg)
+            return
+        }
+
         val prefs = uiState.value.prefs
         val extractedText = extractResponseText(prefs.apiProvider, result.responseBody)
         responseBody.value = extractedText
@@ -622,9 +642,10 @@ class AppViewModel(
 
     private suspend fun handleError(sessionId: String, renderedBody: String, throwable: Throwable) {
         val message = throwable.message ?: throwable::class.java.simpleName
-        errorMessage.value = message
+        val cleanMsg = message.take(300).replace("\n", " ")
+        errorMessage.value = cleanMsg
         responseBody.value = renderedBody
-        chatRepository.addMessage(sessionId, "error", message)
+        chatRepository.addMessage(sessionId, "error", cleanMsg)
     }
 
     private fun persistPrefs(transform: (AppPrefs) -> AppPrefs) {
