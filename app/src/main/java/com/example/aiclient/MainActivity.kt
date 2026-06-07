@@ -2,9 +2,6 @@ package com.example.aiclient
 
 import android.os.Environment
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import android.os.Bundle
@@ -103,10 +100,7 @@ import com.example.aiclient.ConnectionStatus
 import com.example.aiclient.data.MessageEntity
 import com.example.aiclient.data.SessionEntity
 import com.example.aiclient.ui.AIClientTheme
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -133,6 +127,8 @@ class MainActivity : ComponentActivity() {
                     onUpdateMaxTokens = vm::updateMaxTokens,
                     onUpdateGlobalMemory = vm::updateGlobalMemory,
                     onTestConnection = vm::testConnection,
+                    onBackup = { scope.launch { doBackup(vm, ctx) } },
+                    onRestore = { scope.launch { doRestore(vm, ctx) } },
                     connectionStatus = uiState.connectionStatus,
                     connectionError = uiState.connectionError,
 
@@ -159,6 +155,8 @@ private fun MainScreen(
     onUpdateMaxTokens: (Int) -> Unit,
     onUpdateGlobalMemory: (String) -> Unit,
     onTestConnection: () -> Unit,
+    onBackup: () -> Unit,
+    onRestore: () -> Unit,
     connectionStatus: ConnectionStatus,
     connectionError: String,
 ) {
@@ -269,6 +267,8 @@ private fun MainScreen(
             onUpdateMaxTokens = onUpdateMaxTokens,
             onUpdateGlobalMemory = onUpdateGlobalMemory,
             onTestConnection = onTestConnection,
+            onBackup = onBackup,
+            onRestore = onRestore,
             connectionStatus = connectionStatus,
             connectionError = connectionError,
             onDismiss = { showSettings.value = false },
