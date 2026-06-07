@@ -410,7 +410,7 @@ private fun SessionSidebar(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    "Pengaturan API",
+                    "Pengaturan",
                     color = Color(0xFFE0E0E0),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
@@ -793,7 +793,7 @@ private fun SettingsDialog(
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         title = {
             Text(
-                text = "Pengaturan API",
+                text = "Pengaturan",
                 color = Color.White,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
