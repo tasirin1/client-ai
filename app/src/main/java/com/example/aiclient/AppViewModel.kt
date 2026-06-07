@@ -702,7 +702,7 @@ class AppViewModel(
                         settingsStore = container.settingsStore,
                         chatRepository = container.chatRepository,
                         apiClient = container.apiClient,
-
+                        backupManager = container.backupManager,
                     ) as T
                 }
             }
