@@ -137,8 +137,8 @@ class MainActivity : ComponentActivity() {
                     onTestConnection = vm::testConnection,
                     connectionStatus = uiState.connectionStatus,
                     connectionError = uiState.connectionError,
-                    serverIp = serverIp.value,
-                    serverRunning = serverRunning.value,
+                    serverIp = serverIp,
+                    serverRunning = serverRunning,
                 )
             }
         }
@@ -203,8 +203,8 @@ private fun MainScreen(
                     },
                     onDeleteSession = onDeleteSession,
                     onOpenSettings = { showSettings.value = true },
-                    serverIp = serverIp.value,
-                    serverRunning = serverRunning.value,
+                    serverIp = serverIp,
+                    serverRunning = serverRunning,
                 )
             }
         },
