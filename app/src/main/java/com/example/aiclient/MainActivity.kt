@@ -1,5 +1,12 @@
 package com.example.aiclient
 
+import android.os.Environment
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -1124,14 +1131,6 @@ private fun SettingsDialog(
 }
 
 // --- Backup / Restore helpers ---
-import android.os.Environment
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-
 private suspend fun doBackup(vm: AppViewModel, ctx: android.content.Context) {
     withContext(Dispatchers.IO) {
         try {
