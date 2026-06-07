@@ -100,6 +100,9 @@ import com.example.aiclient.ConnectionStatus
 import com.example.aiclient.data.MessageEntity
 import com.example.aiclient.data.SessionEntity
 import com.example.aiclient.ui.AIClientTheme
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.Calendar
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -112,6 +115,8 @@ class MainActivity : ComponentActivity() {
             AIClientTheme {
                 val vm: AppViewModel = viewModel(factory = AppViewModel.factory(container))
                 val uiState by vm.uiState.collectAsState()
+                val backupScope = rememberCoroutineScope()
+                val backupCtx = androidx.compose.ui.platform.LocalContext.current
                 MainScreen(
                     uiState = uiState,
                     onCreateSession = vm::createSession,
@@ -127,8 +132,8 @@ class MainActivity : ComponentActivity() {
                     onUpdateMaxTokens = vm::updateMaxTokens,
                     onUpdateGlobalMemory = vm::updateGlobalMemory,
                     onTestConnection = vm::testConnection,
-                    onBackup = { scope.launch { doBackup(vm, ctx) } },
-                    onRestore = { scope.launch { doRestore(vm, ctx) } },
+                    onBackup = { backupScope.launch { doBackup(vm, backupCtx) } },
+                    onRestore = { backupScope.launch { doRestore(vm, backupCtx) } },
                     connectionStatus = uiState.connectionStatus,
                     connectionError = uiState.connectionError,
 
