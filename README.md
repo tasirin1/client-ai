@@ -103,4 +103,4 @@ app/src/main/java/com/example/aiclient/
 ```
 
 ## Lisensi
-Open source. Kembangkan sendiri sesuai kebutuhan.
+[GNU General Public License v3.0](LICENSE) - Open source, bebas dikembangkan dengan syarat tetap open source.
