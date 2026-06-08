@@ -205,7 +205,9 @@ class AppViewModel(
             ?.let { chatRepository.getSessionOnce(it) }
         val session = activeSession ?: run {
             val existing = chatRepository.observeSessions().first().firstOrNull()
-            existing ?: chatRepository.createSession("Chat Baru")
+            existing ?: chatRepository.createSession("Chat Baru").also {
+                sendAutoGreeting(it.id)
+            }
         }
         settingsStore.update { it.copy(activeSessionId = session.id) }
     }
@@ -435,11 +437,13 @@ class AppViewModel(
 
         val messages = mutableListOf<String>()
 
-        if (prefs.globalMemory.isNotBlank()) {
-            messages.add("""{"role": "system", "content": ${prefs.globalMemory.toJsonString()}}""")
-        }
+                val timeCtx = getCurrentTimeContext()
+        val sysContent = if (prefs.globalMemory.isNotBlank()) {
+            "$timeCtx\n${prefs.globalMemory}"
+        } else timeCtx
+        messages.add("""{"role": "system", "content": ${sysContent.toJsonString()}}""")
 
-        for (msg in history) {
+        for (msg in history) for (msg in history) {
             val role = when (msg.role) {
                 "request" -> "user"
                 "response" -> "assistant"
@@ -498,9 +502,11 @@ class AppViewModel(
 
         val body = buildString {
             appendLine("{")
-            if (prefs.globalMemory.isNotBlank()) {
-                appendLine("  \"system_instruction\": {\"parts\": [{\"text\": ${prefs.globalMemory.toJsonString()}}]},")
-            }
+            val timeCtxG = getCurrentTimeContext()
+            val sysContentG = if (prefs.globalMemory.isNotBlank()) {
+                "$timeCtxG\n${prefs.globalMemory}"
+            } else timeCtxG
+            appendLine("  \"system_instruction\": {\"parts\": [{\"text\": ${sysContentG.toJsonString()}}]},")
             appendLine("  \"contents\": [")
             appendLine("    $contentsJson")
             appendLine("  ],")
@@ -543,9 +549,11 @@ class AppViewModel(
             appendLine("{")
             appendLine("  \"model\": \"${prefs.model}\",")
             appendLine("  \"max_tokens\": ${prefs.maxTokens},")
-            if (prefs.globalMemory.isNotBlank()) {
-                appendLine("  \"system\": ${prefs.globalMemory.toJsonString()},")
-            }
+            val timeCtxA = getCurrentTimeContext()
+            val sysContentA = if (prefs.globalMemory.isNotBlank()) {
+                "$timeCtxA\n${prefs.globalMemory}"
+            } else timeCtxA
+            appendLine("  \"system\": ${sysContentA.toJsonString()},")
             appendLine("  \"messages\": [")
             appendLine("    $messagesJson")
             appendLine("  ]")
@@ -651,6 +659,24 @@ class AppViewModel(
         chatRepository.addMessage(sessionId, "error", cleanMsg)
     }
 
+    private fun sendAutoGreeting(sessionId: String) {
+        viewModelScope.launch {
+            try {
+                val prefs = settingsStore.prefsFlow.first()
+                val greetingPrompt = "Sapa pengguna dengan ramah. Perkenalkan dirimu sebagai asisten AI yang membantu."
+                val (requestUrl, headers, body) = buildRequest(prefs, emptyList(), greetingPrompt)
+                runCatching {
+                    apiClient.execute(url = requestUrl, method = "POST", headersText = headers, body = body)
+                }.onSuccess { result ->
+                    if (result.statusCode in 200..299) {
+                        val text = extractResponseText(prefs.apiProvider, result.responseBody)
+                        chatRepository.addMessage(sessionId, "response", text)
+                    }
+                }.onFailure { }
+            } catch (_: Exception) { }
+        }
+    }
+
     private fun persistPrefs(transform: (AppPrefs) -> AppPrefs) {
         viewModelScope.launch {
             settingsStore.update(transform)
@@ -691,6 +717,20 @@ class AppViewModel(
     suspend fun restoreFromJson(jsonString: String): Boolean {
         val backup = backupManager.deserialize(jsonString) ?: return false
         return backupManager.restore(backup)
+    }
+
+    private fun getCurrentTimeContext(): String {
+        val now = java.util.Calendar.getInstance()
+        val days = arrayOf("Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu")
+        val months = arrayOf("Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember")
+        val dayName = days[now.get(java.util.Calendar.DAY_OF_WEEK) - 1]
+        val monthName = months[now.get(java.util.Calendar.MONTH)]
+        val date = now.get(java.util.Calendar.DAY_OF_MONTH)
+        val year = now.get(java.util.Calendar.YEAR)
+        val hour = now.get(java.util.Calendar.HOUR_OF_DAY)
+        val minute = now.get(java.util.Calendar.MINUTE)
+        val tz = java.text.SimpleDateFormat("z", java.util.Locale.getDefault()).format(now.time)
+        return "Hari ini: $dayName, $date $monthName $year. Waktu: $hour:$minute $tz.\n\nKamu adalah asisten AI yang membantu dan ramah."
     }
 
     companion object {
