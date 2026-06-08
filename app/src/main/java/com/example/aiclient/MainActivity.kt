@@ -1,12 +1,9 @@
 package com.example.aiclient
 
-import android.os.Environment
-import java.io.File
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -117,6 +114,16 @@ class MainActivity : ComponentActivity() {
                 val uiState by vm.uiState.collectAsState()
                 val backupScope = rememberCoroutineScope()
                 val backupCtx = androidx.compose.ui.platform.LocalContext.current
+                val backupLauncher = rememberLauncherForActivityResult(
+                    contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
+                ) { uri ->
+                    if (uri != null) doBackupWithUri(vm, uri, backupCtx, backupScope)
+                }
+                val restoreLauncher = rememberLauncherForActivityResult(
+                    contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+                ) { uri ->
+                    if (uri != null) doRestoreFromUri(vm, uri, backupCtx, backupScope)
+                }
                 MainScreen(
                     uiState = uiState,
                     onCreateSession = vm::createSession,
@@ -132,8 +139,11 @@ class MainActivity : ComponentActivity() {
                     onUpdateMaxTokens = vm::updateMaxTokens,
                     onUpdateGlobalMemory = vm::updateGlobalMemory,
                     onTestConnection = vm::testConnection,
-                    onBackup = { backupScope.launch { doBackup(vm, backupCtx) } },
-                    onRestore = { backupScope.launch { doRestore(vm, backupCtx) } },
+                    onBackup = {
+                        val dateStr = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(Date())
+                        backupLauncher.launch("ai-client-backup-$dateStr.json")
+                    },
+                    onRestore = { restoreLauncher.launch(arrayOf("application/json")) },
                     connectionStatus = uiState.connectionStatus,
                     connectionError = uiState.connectionError,
 
@@ -1136,60 +1146,35 @@ private fun SettingsDialog(
 }
 
 // --- Backup / Restore helpers ---
-private suspend fun doBackup(vm: AppViewModel, ctx: android.content.Context) {
-    withContext(Dispatchers.IO) {
+private fun doBackupWithUri(vm: AppViewModel, uri: android.net.Uri, ctx: android.content.Context, scope: kotlinx.coroutines.CoroutineScope) {
+    scope.launch {
         try {
             val json = vm.createBackupJson()
-            val dateStr = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(Date())
-            val fileName = "ai-client-backup-$dateStr.json"
-
-            if (android.os.Build.VERSION.SDK_INT >= 29) {
-                val contentValues = android.content.ContentValues().apply {
-                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, fileName)
-                    put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/json")
-                    put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
-                }
-                val uri = ctx.contentResolver.insert(
-                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                    contentValues
-                )
-                if (uri != null) {
-                    ctx.contentResolver.openOutputStream(uri)?.use { out ->
-                        out.write(json.toByteArray(Charsets.UTF_8))
-                    }
-                    contentValues.clear()
-                    contentValues.put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
-                    ctx.contentResolver.update(uri, contentValues, null, null)
-                }
-            } else {
-                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                val file = File(downloadsDir, fileName)
-                file.writeText(json, Charsets.UTF_8)
+            ctx.contentResolver.openOutputStream(uri)?.use { out ->
+                out.write(json.toByteArray(Charsets.UTF_8))
+                out.flush()
             }
+            android.widget.Toast.makeText(ctx, "Backup berhasil disimpan", android.widget.Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.widget.Toast.makeText(ctx, "Backup gagal: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
         }
     }
 }
 
-private suspend fun doRestore(vm: AppViewModel, ctx: android.content.Context) {
-    withContext(Dispatchers.IO) {
+private fun doRestoreFromUri(vm: AppViewModel, uri: android.net.Uri, ctx: android.content.Context, scope: kotlinx.coroutines.CoroutineScope) {
+    scope.launch {
         try {
-            // Read backup JSON from the intent URI (passed via onRestore)
-            // For direct file access, try reading from Downloads
-            val downloadsDir = if (android.os.Build.VERSION.SDK_INT >= 29) {
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val json = ctx.contentResolver.openInputStream(uri)?.use { input ->
+                input.bufferedReader(Charsets.UTF_8).readText()
+            } ?: throw Exception("Cannot read file")
+            val success = vm.restoreFromJson(json)
+            if (success) {
+                android.widget.Toast.makeText(ctx, "Restore berhasil! Session akan dimuat ulang", android.widget.Toast.LENGTH_LONG).show()
             } else {
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            }
-            val files = downloadsDir.listFiles { f -> f.name.startsWith("ai-client-backup-") && f.name.endsWith(".json") }
-            if (files != null && files.isNotEmpty()) {
-                val latest = files.maxByOrNull { it.lastModified() } ?: return@withContext
-                val json = latest.readText(Charsets.UTF_8)
-                vm.restoreFromJson(json)
+                android.widget.Toast.makeText(ctx, "Restore gagal: format file tidak valid", android.widget.Toast.LENGTH_LONG).show()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.widget.Toast.makeText(ctx, "Restore gagal: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
         }
     }
 }
