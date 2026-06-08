@@ -377,13 +377,21 @@ class AppViewModel(
                 responseBody.value = ""
 
                 val prefs = uiState.value.prefs
+                if (prefs.apiKey.isBlank() && prefs.apiProvider != "Custom") {
+                    errorMessage.value = "API Key belum diatur. Silakan isi di menu Pengaturan."
+                    loading.value = false
+                    return@launch
+                }
+
                 val session = ensureCurrentSession(prefs)
                 val history = chatRepository.getMessagesOnce(session.id)
 
                 val inputForRename = input.take(28).trim()
                 val (requestUrl, headers, body) = buildRequest(prefs, history, input)
 
-                chatRepository.addMessage(session.id, "request", input)
+                if (input.isNotBlank()) {
+                    chatRepository.addMessage(session.id, "request", input)
+                }
 
                 runCatching {
                     apiClient.execute(
@@ -443,7 +451,7 @@ class AppViewModel(
         } else timeCtx
         messages.add("""{"role": "system", "content": ${sysContent.toJsonString()}}""")
 
-        for (msg in history) for (msg in history) {
+        for (msg in history) {
             val role = when (msg.role) {
                 "request" -> "user"
                 "response" -> "assistant"
@@ -663,6 +671,11 @@ class AppViewModel(
         viewModelScope.launch {
             try {
                 val prefs = settingsStore.prefsFlow.first()
+                if (prefs.apiKey.isBlank()) {
+                    val welcome = "Selamat datang! Saya adalah asisten AI Anda. Silakan atur API Key di menu Pengaturan untuk mulai menggunakan AI."
+                    chatRepository.addMessage(sessionId, "response", welcome)
+                    return@launch
+                }
                 val greetingPrompt = "Sapa pengguna dengan ramah. Perkenalkan dirimu sebagai asisten AI yang membantu."
                 val (requestUrl, headers, body) = buildRequest(prefs, emptyList(), greetingPrompt)
                 runCatching {

@@ -143,6 +143,7 @@ class MainActivity : ComponentActivity() {
                         val dateStr = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(Date())
                         backupLauncher.launch("ai-client-backup-$dateStr.json")
                     },
+
                     onRestore = { restoreLauncher.launch(arrayOf("application/json")) },
                     connectionStatus = uiState.connectionStatus,
                     connectionError = uiState.connectionError,
@@ -191,11 +192,18 @@ private fun MainScreen(
     val chatListState = rememberLazyListState()
     var inputText by remember { mutableStateOf("") }
     var showModelMenu by remember { mutableStateOf(false) }
+    val keyboardController = LocalSoftwareKeyboardController.current
     // Auto-scroll when new messages arrive
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
             delay(80)
             chatListState.animateScrollToItem(uiState.messages.lastIndex)
+        }
+    }
+    // Auto-hide keyboard when AI starts responding
+    LaunchedEffect(uiState.isLoading) {
+        if (uiState.isLoading) {
+            keyboardController?.hide()
         }
     }
 
@@ -643,6 +651,10 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String) -> Unit)? = nul
     val isUser = message.role == "request"
     val isError = message.role == "error"
     val clipboardManager = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+    val showCopied = remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    var editText by remember { mutableStateOf(message.content) }
 
     val backgroundColor = when {
         isError -> Color(0xFF3D1A1A)
@@ -655,9 +667,17 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String) -> Unit)? = nul
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
     ) {
+        // Role label
+        Text(
+            text = if (isUser) "Kamu" else if (isError) "Error" else "Asisten",
+            color = if (isUser) Color(0xFF10A37F) else if (isError) Color(0xFFEF9A9A) else Color(0xFF888888),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+        )
         AnimatedVisibility(
             visible = true,
             enter = fadeIn(animationSpec = tween(300)),
@@ -666,19 +686,58 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String) -> Unit)? = nul
                 modifier = Modifier.widthIn(max = 320.dp),
                 colors = CardDefaults.cardColors(containerColor = backgroundColor),
                 shape = RoundedCornerShape(
-                    topStart = if (isUser) 16.dp else 4.dp,
-                    topEnd = if (isUser) 4.dp else 16.dp,
+                    topStart = if (isUser) 16.dp else 8.dp,
+                    topEnd = if (isUser) 8.dp else 16.dp,
                     bottomStart = 16.dp,
                     bottomEnd = 16.dp,
                 ),
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = message.content,
-                        color = textColor,
-                        fontSize = 15.sp,
-                        lineHeight = 22.sp,
-                    )
+                    if (editing && isUser) {
+                        OutlinedTextField(
+                            value = editText,
+                            onValueChange = { editText = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2,
+                            maxLines = 5,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF10A37F),
+                                unfocusedBorderColor = Color(0xFF333333),
+                                cursorColor = Color(0xFF10A37F),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedContainerColor = Color(0xFF121212),
+                                unfocusedContainerColor = Color(0xFF121212),
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    editing = false
+                                    onEdit?.invoke(editText)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
+                                shape = RoundedCornerShape(8.dp),
+                            ) {
+                                Text("Simpan", fontSize = 12.sp)
+                            }
+                            OutlinedButton(
+                                onClick = { editing = false; editText = message.content },
+                                shape = RoundedCornerShape(8.dp),
+                            ) {
+                                Text("Batal", fontSize = 12.sp)
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = message.content,
+                            color = textColor,
+                            fontSize = 15.sp,
+                            lineHeight = 22.sp,
+                        )
+                    }
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -696,13 +755,18 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String) -> Unit)? = nul
                                 IconButton(
                                     onClick = {
                                         clipboardManager.setText(AnnotatedString(message.content))
+                                        showCopied.value = true
+                                        scope.launch {
+                                            delay(1500)
+                                            showCopied.value = false
+                                        }
                                     },
                                     modifier = Modifier.size(28.dp),
                                 ) {
                                     Icon(
-                                        Icons.Default.ContentCopy,
+                                        if (showCopied.value) Icons.Default.CheckCircle else Icons.Default.ContentCopy,
                                         contentDescription = "Salin",
-                                        tint = Color(0xFF666666),
+                                        tint = if (showCopied.value) Color(0xFF10A37F) else Color(0xFF666666),
                                         modifier = Modifier.size(16.dp),
                                     )
                                 }
@@ -710,7 +774,7 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String) -> Unit)? = nul
                             if (isUser && !isError && onEdit != null) {
                                 // Edit button for user messages
                                 IconButton(
-                                    onClick = { onEdit(message.content) },
+                                    onClick = { editing = true },
                                     modifier = Modifier.size(28.dp),
                                 ) {
                                     Icon(
