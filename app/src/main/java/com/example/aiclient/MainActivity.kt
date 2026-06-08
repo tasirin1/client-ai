@@ -193,7 +193,6 @@ private fun MainScreen(
     val showSettings = rememberSaveable { mutableStateOf(false) }
     val chatListState = rememberLazyListState()
     var inputText by remember { mutableStateOf("") }
-    val showModelMenu = remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
     // Auto-scroll when new messages arrive
     LaunchedEffect(uiState.messages.size) {
@@ -249,53 +248,13 @@ private fun MainScreen(
                                 softWrap = true,
                                 fontSize = 16.sp,
                             )
-                            // Model selector
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.clickable { showModelMenu.value = true }
-                            ) {
-                                Text(
-                                    text = uiState.prefs.model,
-                                    color = Color(0xFF10A37F),
-                                    fontSize = 11.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Icon(
-                                    Icons.Default.ArrowDownward,
-                                    contentDescription = null,
-                                    tint = Color(0xFF10A37F),
-                                    modifier = Modifier.size(14.dp),
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showModelMenu.value,
-                                onDismissRequest = { showModelMenu.value = false }
-                            ) {
-                                val models = modelsByProvider[uiState.prefs.apiProvider] ?: emptyList()
-                                if (models.isEmpty()) {
-                                    DropdownMenuItem(
-                                        text = { Text(uiState.prefs.model, fontSize = 13.sp) },
-                                        onClick = { showModelMenu.value = false }
-                                    )
-                                } else {
-                                    models.forEach { model ->
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(
-                                                    model,
-                                                    fontSize = 13.sp,
-                                                    color = if (model == uiState.prefs.model) Color(0xFF10A37F) else Color(0xFFE0E0E0),
-                                                )
-                                            },
-                                            onClick = {
-                                                onUpdateModel(model)
-                                                showModelMenu.value = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
+                            Text(
+                                text = uiState.prefs.model,
+                                color = Color(0xFF10A37F),
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     },
                     navigationIcon = {
