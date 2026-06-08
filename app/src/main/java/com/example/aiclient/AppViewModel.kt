@@ -880,12 +880,9 @@ Contoh: Jika user bilang "Chat jam 8 malam", jawab "Baik, nanti jam 8 saya chat 
     }
 
     // Fallback providers/models ordered by priority
-    private val fallbackChain = listOf(
-        "OpenRouter" to listOf("openai/gpt-4o-mini", "google/gemini-2.0-flash", "meta-llama/llama-3.3-70b-instruct"),
-        "OpenAI" to listOf("gpt-4o-mini", "gpt-3.5-turbo"),
-        "Groq" to listOf("llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it"),
-        "Deepseek" to listOf("deepseek-chat", "deepseek-reasoner"),
-    )
+    private val fallbackChain: List<Pair<String, List<String>>> by lazy {
+        com.example.aiclient.data.getFallbackChain()
+    }
 
     private suspend fun tryFallback(sessionId: String, originalInput: String, errorHint: String): Boolean {
         val prefs = settingsStore.prefsFlow.first()
@@ -893,15 +890,9 @@ Contoh: Jika user bilang "Chat jam 8 malam", jawab "Baik, nanti jam 8 saya chat 
         val currentModel = prefs.model
         
         // Try the next model in current provider's model list
-        val models = when (currentProvider) {
-            "OpenAI" -> listOf("gpt-4o-mini", "gpt-3.5-turbo", "gpt-4o")
-            "Anthropic" -> listOf("claude-3-haiku-20240307", "claude-3-5-sonnet-20241022")
-            "Google" -> listOf("gemini-1.5-flash", "gemini-1.5-pro")
-            "Deepseek" -> listOf("deepseek-chat", "deepseek-reasoner")
-            "Groq" -> listOf("llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it")
-            "OpenRouter" -> listOf("openai/gpt-4o-mini", "google/gemini-2.0-flash")
-            else -> return false
-        }
+        val allModels = com.example.aiclient.data.getModelsForProvider(currentProvider)
+        if (allModels.isEmpty()) return false
+        val models = allModels
         
         val currentModelIndex = models.indexOf(currentModel)
         if (currentModelIndex >= 0 && currentModelIndex < models.lastIndex) {
@@ -923,13 +914,16 @@ Contoh: Jika user bilang "Chat jam 8 malam", jawab "Baik, nanti jam 8 saya chat 
             }
         }
         
-        // Try open models on OpenRouter as last resort
-        for (provider in chainProviders) {
+        // Try ALL providers with API keys as last resort
+        for (provider in com.example.aiclient.data.getAllProviderNames()) {
+            if (provider == "Custom" || provider == currentProvider) continue
             val config = getProviderConfig(prefs, provider)
-            if (config.apiKey.isNotBlank() && provider != currentProvider) {
-                return tryRetryWithModel(sessionId, originalInput, provider, 
-                    if (provider == "OpenRouter") "openai/gpt-4o-mini" 
-                    else getDefaultModel(provider))
+            if (config.apiKey.isNotBlank()) {
+                val firstModel = com.example.aiclient.data.getModelsForProvider(provider).firstOrNull() 
+                    ?: getDefaultModel(provider)
+                if (firstModel.isNotBlank()) {
+                    return tryRetryWithModel(sessionId, originalInput, provider, firstModel)
+                }
             }
         }
         
