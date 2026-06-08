@@ -78,7 +78,7 @@ val ALL_PROVIDERS: List<ProviderInfo> = listOf(
         defaultModel = "gemini-1.5-flash",
         defaultBaseUrl = "https://generativelanguage.googleapis.com/v1beta/models",
         models = listOf(
-            "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro",
+            "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro",
             "gemini-2.0-flash-lite", "gemini-1.0-pro",
         ),
         apiType = "google",
@@ -106,7 +106,7 @@ val ALL_PROVIDERS: List<ProviderInfo> = listOf(
         models = listOf(
             "openai/gpt-4o", "openai/gpt-4o-mini", "openai/gpt-4-turbo",
             "anthropic/claude-3.5-sonnet", "anthropic/claude-3-haiku",
-            "google/gemini-2.0-flash", "google/gemini-1.5-flash",
+            "google/gemini-2.5-flash", "google/gemini-2.0-flash", "google/gemini-1.5-flash",
             "meta-llama/llama-3.3-70b-instruct", "meta-llama/llama-3.1-8b-instruct",
             "deepseek/deepseek-r1", "deepseek/deepseek-chat",
             "mistralai/mistral-small-24b-instruct", "mistralai/mistral-large",
