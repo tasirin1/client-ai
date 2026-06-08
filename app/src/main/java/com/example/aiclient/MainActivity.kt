@@ -6,7 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.easeInOutCubic
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -637,7 +637,7 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
             visible = true,
             enter = slideInVertically(
                 initialOffsetY = { if (isUser) it else -it },
-                animationSpec = tween(400, easing = easeInOutCubic)
+                animationSpec = tween(400, easing = FastOutSlowInEasing)
             ) + fadeIn(animationSpec = tween(300)),
         ) {
             Card(
