@@ -5,6 +5,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.easeInOutCubic
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -208,7 +211,7 @@ private fun MainScreen(
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
             delay(80)
-            chatListState.animateScrollToItem(uiState.messages.lastIndex)
+            chatListState.animateScrollToItem(uiState.messages.lastIndex, scrollOffset = -20)
         }
     }
     // Auto-hide keyboard when AI starts responding
@@ -617,7 +620,9 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
     ) {
         // Role label
@@ -630,10 +635,14 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
         )
         AnimatedVisibility(
             visible = true,
-            enter = fadeIn(animationSpec = tween(300)),
+            enter = slideInVertically(
+                initialOffsetY = { if (isUser) it else -it },
+                animationSpec = tween(400, easing = easeInOutCubic)
+            ) + fadeIn(animationSpec = tween(300)),
         ) {
             Card(
-                modifier = Modifier.widthIn(max = 320.dp),
+                modifier = Modifier
+                    .widthIn(max = 320.dp),
                 colors = CardDefaults.cardColors(containerColor = backgroundColor),
                 shape = RoundedCornerShape(
                     topStart = if (isUser) 16.dp else 8.dp,
@@ -1303,22 +1312,8 @@ private fun doRestoreFromUri(vm: AppViewModel, uri: android.net.Uri, ctx: androi
 
 @Composable
 private fun TypingIndicator() {
-    // ChatGPT-style typing animation
-    val dotCount = 3
-    val dotVisible = remember { mutableStateOf(0) }
-    
-    LaunchedEffect(Unit) {
-        while (true) {
-            dotVisible.value = 0
-            delay(200)
-            dotVisible.value = 1
-            delay(200)
-            dotVisible.value = 2
-            delay(200)
-            dotVisible.value = 3
-            delay(600)
-        }
-    }
+    // ChatGPT-style smooth typing animation
+    val infiniteTransition = rememberInfiniteTransition(label = "typing")
     
     Row(
         modifier = Modifier
@@ -1327,14 +1322,34 @@ private fun TypingIndicator() {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        for (i in 0 until dotCount) {
+        for (i in 0 until 3) {
+            val dotAlpha by infiniteTransition.animateFloat(
+                initialValue = 0.2f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(600, delayMillis = i * 200),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+                label = "dot$i"
+            )
+            val dotScale by infiniteTransition.animateFloat(
+                initialValue = 0.6f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(600, delayMillis = i * 200),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+                label = "dotScale$i"
+            )
             Box(
                 modifier = Modifier
                     .size(8.dp)
-                    .background(
-                        if (i < dotVisible.value) Color(0xFF10A37F) else Color(0xFF333333),
-                        CircleShape
-                    )
+                    .graphicsLayer {
+                        alpha = dotAlpha
+                        scaleX = dotScale
+                        scaleY = dotScale
+                    }
+                    .background(Color(0xFF10A37F), CircleShape)
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
