@@ -64,6 +64,8 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
@@ -191,7 +193,7 @@ private fun MainScreen(
     val showSettings = rememberSaveable { mutableStateOf(false) }
     val chatListState = rememberLazyListState()
     var inputText by remember { mutableStateOf("") }
-    var showModelMenu by remember { mutableStateOf(false) }
+    val showModelMenu = remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
     // Auto-scroll when new messages arrive
     LaunchedEffect(uiState.messages.size) {
@@ -260,7 +262,7 @@ private fun MainScreen(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Icon(
-                                    Icons.Default.ExpandMore,
+                                    Icons.Default.ArrowDownward,
                                     contentDescription = null,
                                     tint = Color(0xFF10A37F),
                                     modifier = Modifier.size(14.dp),
@@ -764,7 +766,7 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String) -> Unit)? = nul
                                     modifier = Modifier.size(28.dp),
                                 ) {
                                     Icon(
-                                        if (showCopied.value) Icons.Default.CheckCircleOutline else Icons.Default.ContentCopy,
+                                        Icons.Default.ContentCopy,
                                         contentDescription = "Salin",
                                         tint = if (showCopied.value) Color(0xFF10A37F) else Color(0xFF666666),
                                         modifier = Modifier.size(16.dp),

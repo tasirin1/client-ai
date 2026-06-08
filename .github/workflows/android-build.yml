@@ -31,12 +31,10 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build debug APK
-        run: |
-          ./gradlew assembleDebug --stacktrace --scan 2>&1
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ai-client-debug-apk
           path: app/build/outputs/apk/debug/*.apk
-
