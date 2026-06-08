@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class ConnectionStatus {
@@ -651,6 +652,7 @@ class AppViewModel(
         val extractedText = extractResponseText(prefs.apiProvider, result.responseBody)
         responseBody.value = extractedText
         chatRepository.addMessage(sessionId, "response", extractedText)
+        checkForSchedule(extractedText, sessionId)
         val currentSession = chatRepository.getSessionOnce(sessionId)
         val shouldAutoRename = currentSession?.title?.startsWith("Chat") != false || currentSession?.title?.startsWith("Sesi") != false
         if (shouldAutoRename) {
@@ -743,7 +745,58 @@ class AppViewModel(
         val hour = now.get(java.util.Calendar.HOUR_OF_DAY)
         val minute = now.get(java.util.Calendar.MINUTE)
         val tz = java.text.SimpleDateFormat("z", java.util.Locale.getDefault()).format(now.time)
-        return "Hari ini: $dayName, $date $monthName $year. Waktu: $hour:$minute $tz.\n\nKamu adalah asisten AI yang membantu dan ramah."
+        return "Hari ini: $dayName, $date $monthName $year. Waktu: $hour:$minute $tz.\n\nKamu adalah asisten AI yang membantu dan ramah.\n\nFITUR JADWAL: Jika pengguna minta chat di jam tertentu, jawab dengan format: [SCHEDULE:jam:menit]pesanmu. Contoh: [SCHEDULE:20:00]Halo! Ada yang bisa dibantu malam ini?"
+    }
+
+
+    private fun checkForSchedule(text: String, sessionId: String) {
+        val pattern = Regex("\\[SCHEDULE:(\\d{1,2}):(\\d{2})\\](.*)", RegexOption.IGNORE_CASE)
+        val match = pattern.find(text)
+        if (match != null) {
+            val hour = match.groupValues[1].toIntOrNull() ?: return
+            val minute = match.groupValues[2].toIntOrNull() ?: return
+            val msg = match.groupValues[3].trim()
+            if (hour in 0..23 && minute in 0..59 && msg.isNotBlank()) {
+                scheduleMessageAt(hour, minute, msg, sessionId)
+            }
+        }
+    }
+
+    private fun scheduleMessageAt(hour: Int, minute: Int, message: String, sessionId: String) {
+        viewModelScope.launch {
+            val now = java.util.Calendar.getInstance()
+            val target = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, hour)
+                set(java.util.Calendar.MINUTE, minute)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+                if (before(now)) {
+                    add(java.util.Calendar.DAY_OF_YEAR, 1)
+                }
+            }
+            val delayMs = target.timeInMillis - now.timeInMillis
+            val timeStr = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(target.time)
+            
+            chatRepository.addMessage(sessionId, "response", "\\u23F0 Chat akan dikirim otomatis jam " + timeStr)
+            
+            delay(delayMs)
+            
+            val prefs = settingsStore.prefsFlow.first()
+            val updatedHistory = chatRepository.getMessagesOnce(sessionId)
+            val (requestUrl, headers, body) = buildRequest(prefs, updatedHistory, message)
+            chatRepository.addMessage(sessionId, "request", message)
+            
+            kotlinx.coroutines.runCatching {
+                apiClient.execute(url = requestUrl, method = "POST", headersText = headers, body = body)
+            }.onSuccess { result ->
+                if (result.statusCode in 200..299) {
+                    val text = extractResponseText(prefs.apiProvider, result.responseBody)
+                    chatRepository.addMessage(sessionId, "response", text)
+                }
+            }.onFailure { e ->
+                chatRepository.addMessage(sessionId, "error", "Gagal chat terjadwal: " + (e.message ?: ""))
+            }
+        }
     }
 
     companion object {
