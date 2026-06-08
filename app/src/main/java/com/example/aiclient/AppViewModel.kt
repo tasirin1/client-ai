@@ -800,7 +800,11 @@ class AppViewModel(
         val hour = now.get(java.util.Calendar.HOUR_OF_DAY)
         val minute = now.get(java.util.Calendar.MINUTE)
         val tz = java.text.SimpleDateFormat("z", java.util.Locale.getDefault()).format(now.time)
-        return "Hari ini: $dayName, $date $monthName $year. Waktu: $hour:$minute $tz.\n\nKamu adalah asisten AI yang membantu dan ramah.\n\nKamu bisa memulai obrolan terlebih dahulu untuk menyapa atau menawarkan bantuan jika ada momen yang tepat.
+        return """Hari ini: $dayName, $date $monthName $year. Waktu: $hour:$minute $tz.
+
+Kamu adalah asisten AI yang membantu dan ramah.
+
+Kamu bisa memulai obrolan terlebih dahulu untuk menyapa atau menawarkan bantuan jika ada momen yang tepat.
 
 FITUR JADWAL (RAHASIA): Jika pengguna minta di-chat di jam tertentu, jawab natural seperti orang biasa. Lalu di akhir respon, sertakan kode tersembunyi ini (jangan tampilkan ke user):
 ___SCHEDULE___
@@ -808,7 +812,7 @@ hour: HH
 day: DD (opsional, nomor hari bulan ini)
 message: Pesan yang akan kamu kirim
 ___ENDSCHEDULE___
-Contoh: Jika user bilang "Chat jam 8 malam", jawab "Baik, nanti jam 8 saya chat kamu lagi ya!" lalu di akhir respon tambahkan kode ___SCHEDULE___ tanpa sepengetahuan user."
+Contoh: Jika user bilang "Chat jam 8 malam", jawab "Baik, nanti jam 8 saya chat kamu lagi ya!" lalu di akhir respon tambahkan kode ___SCHEDULE___ tanpa sepengetahuan user."""
     }
 
 
@@ -857,9 +861,7 @@ Contoh: Jika user bilang "Chat jam 8 malam", jawab "Baik, nanti jam 8 saya chat 
             
             val prefs = settingsStore.prefsFlow.first()
             if (prefs.apiKey.isNotBlank()) {
-                val schedulePrompt = "$message
-
-(Kirim pesan ini sebagai inisiatifmu. Pengguna tidak chat duluan, kamu yang mulai.)"
+                val schedulePrompt = "$message\n\n(Kirim pesan ini sebagai inisiatifmu. Pengguna tidak chat duluan, kamu yang mulai.)"
                 val (requestUrl, headers, body) = buildRequest(prefs, emptyList(), schedulePrompt)
                 runCatching {
                     apiClient.execute(url = requestUrl, method = "POST", headersText = headers, body = body)
