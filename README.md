@@ -1,98 +1,104 @@
 # AI Client
 
-Android client AI generik dengan antarmuka seperti ChatGPT. Mendukung OpenAI, Anthropic, Google Gemini, Deepseek, dan API kustom lainnya.
+Android client AI generik dengan antarmuka seperti ChatGPT. Mendukung berbagai provider AI: OpenAI, Anthropic, Google Gemini, Deepseek, Groq, OpenRouter.
 
 ## Fitur
 
 ### 💬 Chat seperti ChatGPT
-- Sidebar sesi dengan grup tanggal (Hari Ini / Kemarin / 7 Hari / Bulan Ini)
+- **Sidebar sesi** dengan grup tanggal (Hari Ini / Kemarin / 7 Hari / Bulan Ini)
 - Preview pesan terakhir di setiap sesi
 - Cari sesi berdasarkan judul
-- Buat, pilih, dan hapus sesi
+- Buat, pilih, rename, dan hapus sesi
+- **Edit pesan** — tap ikon edit pada pesan kamu untuk mengubah dan kirim ulang
+- **Copy respons AI** — tap ikon copy, animasi check hijau
+- Auto-scroll ke pesan terbaru
+- Keyboard otomatis turun saat AI merespon
 
-### 🔧 Pengaturan API lengkap
-- **Provider:** OpenAI / Anthropic / Google Gemini / Deepseek / Custom
-- **API Key** (masked, bisa ditampilkan)
-- **Model** — daftar model per provider, plus input model kustom
-- **Base URL** auto-terisi sesuai provider
+### 🔧 Multi-Provider AI
+Setiap provider punya konfigurasi sendiri (API key, model, base URL, temperature, max tokens):
+
+| Provider | Model Default |
+|----------|--------------|
+| **OpenAI** | gpt-4o, gpt-4o-mini, gpt-4-turbo, o1, o3-mini |
+| **Anthropic** | claude-3-5-sonnet, claude-3-opus, claude-3-haiku |
+| **Google Gemini** | gemini-1.5-pro, gemini-1.5-flash, gemini-2.0-flash |
+| **Deepseek** | deepseek-chat, deepseek-reasoner |
+| **Groq** | llama-3.3-70b, mixtral-8x7b, gemma2-9b |
+| **OpenRouter** | openai/gpt-4o, anthropic/claude-3.5, google/gemini-2.0 |
+| **Custom** | Bebas (isi manual) |
+
+### 🧠 Memory & Konteks
+- **System prompt** kustom — atur kepribadian AI
+- **AI tau waktu** — otomatis inject info waktu ke system prompt
+- **Auto-greeting** — AI sapa duluan di sesi baru
+- **Backup & Restore** — simpan/muat memory AI ke file JSON
+
+### 📡 Test Koneksi
+Tombol **Uji Koneksi** di pengaturan untuk verifikasi API:
+- ✅ **Terhubung** — response sukses (2xx)
+- ❌ **Gagal** — tampilkan HTTP code + pesan error
+
+### 🎨 Tampilan
+- Dark mode netral (#121212 + aksen hijau #10A37F)
+- Chat bubble dengan label peran (Kamu / Asisten)
+- Timestamp di setiap pesan
+- Loading indicator saat mengirim
+- Animasi fade-in pesan baru
+
+### 📦 Pengaturan
+- **Provider** — pilih provider, otomatisi isi Base URL
+- **API Key** — masked, bisa ditampilkan
+- **Model** — pilih dari daftar atau input model kustom
 - **Temperature** slider (0.0 – 2.0)
 - **Max Tokens**
 - **System Prompt**
+- **Backup / Restore Data**
 
-### 🔗 Multi-provider
-Setiap provider punya format request yang berbeda secara otomatis:
+## Persyaratan
 
-| Provider | Auth | Endpoint |
-|----------|------|----------|
-| **OpenAI** | Bearer token | `…/v1/chat/completions` |
-| **Anthropic** | x-api-key + version header | `…/v1/messages` |
-| **Google Gemini** | API key via query param | `…/v1beta/models/{model}:generateContent` |
-| **Deepseek** | Bearer token (OpenAI-compatible) | `…/v1/chat/completions` |
-| **Custom** | Bebas (via template engine) | Sesuai konfigurasi |
-
-### 💬 Response Cerdas
-- Response JSON API otomatis di-parse ke teks murni (tidak menampilkan JSON mentah)
-- Mendukung format OpenAI, Anthropic, Google Gemini, Deepseek
-- Riwayat chat tersimpan rapi tanpa nested JSON error
-
-### 📡 Test Koneksi
-Tombol "Test" di pengaturan untuk verifikasi API bisa dijangkau:
-- ✅ Terhubung — response sukses (2xx)
-- ❌ Gagal — tampilkan HTTP code + response body
-
-### 🎨 Tampilan
-- Dark mode netral (abu-abu `#121212` + aksen hijau `#10A37F`)
-- Chat bubble dengan animasi fade-in
-- Timestamp di setiap pesan
-- Loading indicator saat mengirim
-- Input stabil tanpa loncat kursor saat mengetik
-- State input lokal, tidak terpengaruh perubahan state lain
+- Android 8.0+ (API 26)
+- Koneksi internet
+- API Key dari provider AI
 
 ## Cara Pakai
 
-1. Buka proyek ini di **Android Studio**.
-2. Tunggu sync Gradle selesai.
-3. Jalankan ke emulator atau device Android.
-4. Buka **Pengaturan API** (ikon ⚙️ di kanan atas).
-5. Pilih provider, isi **API Key**, pilih **model**.
-6. Klik **Test** untuk verifikasi koneksi.
-7. Tutup pengaturan, ketik pesan, kirim.
+1. Install APK dari [Releases](https://github.com/tasirin1/client-ai/releases)
+2. Buka **Pengaturan** (ikon ⚙️ di sidebar)
+3. Pilih **Provider**, isi **API Key**, pilih **Model**
+4. Klik **Test** untuk verifikasi koneksi
+5. Tutup pengaturan, ketik pesan, kirim
 
 ## Build & CI
 
 ### Build Lokal
-
 ```bash
 ./gradlew assembleDebug
 ```
-
-APK: `app/build/outputs/apk/debug/`
+APK: `app/build/outputs/apk/debug/app-debug.apk`
 
 ### GitHub Actions
-
 Push ke branch `main` otomatis build dan upload APK ke artifact.
 
-## Arsitektur
+## Struktur Proyek
 
 ```
 app/src/main/java/com/example/aiclient/
 ├── MainActivity.kt          # UI (Jetpack Compose)
 ├── AppViewModel.kt          # State management + API logic
-├── AppContainer.kt          # Dependency injection manual
+├── AppContainer.kt          # Dependency injection
 ├── AiClientApplication.kt   # Application class
 ├── data/
 │   ├── AppDatabase.kt       # Room database
 │   ├── ChatDao.kt           # DAO queries
 │   ├── ChatRepository.kt    # Repository
-│   ├── Models.kt            # Entity + AppPrefs
-│   └── SettingsStore.kt     # DataStore preferences
-└── network/
-    └── GenericApiClient.kt  # OkHttp HTTP client
+│   ├── Models.kt            # Entity + AppPrefs + ProviderConfig
+│   ├── SettingsStore.kt     # DataStore preferences
+│   └── BackupManager.kt     # Backup/restore JSON
+├── network/
+│   ├── GenericApiClient.kt  # OkHttp client + template engine
+└── ui/
+    └── Theme.kt             # Dark theme color scheme
 ```
 
-## Catatan
-
-- Sesi & memory tersimpan lokal di device (Room + DataStore).
-- Untuk sinkronisasi lintas device, perlu backend cloud tambahan.
-- Proyek ini fondasi untuk client AI yang bisa dikembangkan lebih lanjut.
-
+## Lisensi
+Open source. Kembangkan sendiri sesuai kebutuhan.
