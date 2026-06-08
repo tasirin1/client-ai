@@ -412,6 +412,54 @@ class AppViewModel(
         }
     }
 
+    fun editMessageAndRegenerate(messageId: String, newContent: String) {
+        viewModelScope.launch {
+            loading.value = true
+            try {
+                val prefs = uiState.value.prefs
+                if (prefs.apiKey.isBlank() && prefs.apiProvider != "Custom") {
+                    errorMessage.value = "API Key belum diatur."
+                    loading.value = false
+                    return@launch
+                }
+                
+                val sessionId = uiState.value.currentSessionId
+                if (sessionId.isBlank()) { loading.value = false; return@launch }
+                
+                // Get all messages and find the edit point
+                val allMessages = chatRepository.getMessagesOnce(sessionId)
+                val msgIndex = allMessages.indexOfFirst { it.id == messageId }
+                if (msgIndex < 0) { loading.value = false; return@launch }
+                
+                // Keep messages BEFORE the edit point
+                val keptMessages = allMessages.take(msgIndex)
+                
+                // Rebuild session: delete all, re-insert kept, add edited message
+                chatRepository.restoreAll(
+                    listOf(chatRepository.getSessionOnce(sessionId) ?: return@launch),
+                    keptMessages
+                )
+                
+                // Add the edited message as new request
+                chatRepository.addMessage(sessionId, "request", newContent)
+                
+                // Send request with kept history and new message
+                errorMessage.value = ""
+                val (requestUrl, headers, body) = buildRequest(prefs, keptMessages, newContent)
+                
+                runCatching {
+                    apiClient.execute(url = requestUrl, method = "POST", headersText = headers, body = body)
+                }.onSuccess { result ->
+                    handleSuccess(sessionId, result, newContent.take(28).trim())
+                }.onFailure { throwable ->
+                    handleError(sessionId, newContent, throwable)
+                }
+            } finally {
+                loading.value = false
+            }
+        }
+    }
+
     private fun buildCustomRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Triple<String, String, String> {
         val historyText = history.joinToString("\n\n") { "${it.role}: ${it.content}" }
         val renderedBody = apiClient.renderTemplate(

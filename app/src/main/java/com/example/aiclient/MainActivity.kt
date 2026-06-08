@@ -132,6 +132,7 @@ class MainActivity : ComponentActivity() {
                     onSelectSession = vm::updateActiveSession,
                     onDeleteSession = vm::deleteSession,
                     onSend = { text -> vm.sendRequest(text) },
+                    onEditMessage = { msgId, text -> vm.editMessageAndRegenerate(msgId, text) },
                     onSessionSearch = vm::updateSessionSearch,
                     onUpdateApiKey = vm::updateApiKey,
                     onUpdateProvider = vm::updateProvider,
@@ -174,6 +175,7 @@ private fun MainScreen(
     onSelectSession: (String) -> Unit,
     onDeleteSession: (String) -> Unit,
     onSend: (String) -> Unit,
+    onEditMessage: ((String, String) -> Unit) = { _, _ -> },
     onSessionSearch: (String) -> Unit,
     onUpdateApiKey: (String) -> Unit,
     onUpdateProvider: (String) -> Unit,
@@ -285,7 +287,7 @@ private fun MainScreen(
                     isLoading = uiState.isLoading,
                     listState = chatListState,
                     modifier = Modifier.weight(1f),
-                    onEditMessage = { text -> inputText = text },
+                    onEditMessage = onEditMessage,
                 )
 
                 ComposerBar(
@@ -545,7 +547,7 @@ private fun ChatArea(
     isLoading: Boolean,
     listState: LazyListState,
     modifier: Modifier = Modifier,
-    onEditMessage: ((String) -> Unit)? = null,
+    onEditMessage: ((String, String) -> Unit)? = null,
 ) {
     if (messages.isEmpty() && !isLoading) {
         Column(
@@ -608,7 +610,7 @@ private fun ChatArea(
 }
 
 @Composable
-private fun ChatBubble(message: MessageEntity, onEdit: ((String) -> Unit)? = null) {
+private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit)? = null) {
     val isUser = message.role == "request"
     val isError = message.role == "error"
     val clipboardManager = LocalClipboardManager.current
@@ -677,7 +679,7 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String) -> Unit)? = nul
                             Button(
                                 onClick = {
                                     editing = false
-                                    onEdit?.invoke(editText)
+                                    onEdit?.invoke(message.id, editText)
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
                                 shape = RoundedCornerShape(8.dp),
