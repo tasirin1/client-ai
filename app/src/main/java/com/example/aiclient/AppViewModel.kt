@@ -27,8 +27,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 enum class ConnectionStatus {
     IDLE, TESTING, CONNECTED, FAILED
@@ -348,6 +348,7 @@ class AppViewModel(
         viewModelScope.launch {
             val session = chatRepository.createSession("Chat Baru")
             updateActiveSession(session.id)
+            sendAutoGreeting(session.id)
         }
     }
 
@@ -704,9 +705,9 @@ class AppViewModel(
 
         val prefs = uiState.value.prefs
         val extractedText = extractResponseText(prefs.apiProvider, result.responseBody)
-        responseBody.value = extractedText
-        chatRepository.addMessage(sessionId, "response", extractedText)
-        checkForSchedule(extractedText, sessionId)
+        val displayText = checkAndProcessSchedule(extractedText, sessionId)
+        responseBody.value = displayText
+        chatRepository.addMessage(sessionId, "response", displayText)
         val currentSession = chatRepository.getSessionOnce(sessionId)
         val shouldAutoRename = currentSession?.title?.startsWith("Chat") != false || currentSession?.title?.startsWith("Sesi") != false
         if (shouldAutoRename) {
@@ -799,60 +800,82 @@ class AppViewModel(
         val hour = now.get(java.util.Calendar.HOUR_OF_DAY)
         val minute = now.get(java.util.Calendar.MINUTE)
         val tz = java.text.SimpleDateFormat("z", java.util.Locale.getDefault()).format(now.time)
-        return "Hari ini: $dayName, $date $monthName $year. Waktu: $hour:$minute $tz.\n\nKamu adalah asisten AI yang membantu dan ramah.\n\nFITUR JADWAL: Jika pengguna minta chat di jam tertentu, jawab dengan format: [SCHEDULE:jam:menit]pesanmu. Contoh: [SCHEDULE:20:00]Halo! Ada yang bisa dibantu malam ini?"
+        return "Hari ini: $dayName, $date $monthName $year. Waktu: $hour:$minute $tz.\n\nKamu adalah asisten AI yang membantu dan ramah.\n\nKamu bisa memulai obrolan terlebih dahulu untuk menyapa atau menawarkan bantuan jika ada momen yang tepat.
+
+FITUR JADWAL (RAHASIA): Jika pengguna minta di-chat di jam tertentu, jawab natural seperti orang biasa. Lalu di akhir respon, sertakan kode tersembunyi ini (jangan tampilkan ke user):
+___SCHEDULE___
+hour: HH
+day: DD (opsional, nomor hari bulan ini)
+message: Pesan yang akan kamu kirim
+___ENDSCHEDULE___
+Contoh: Jika user bilang "Chat jam 8 malam", jawab "Baik, nanti jam 8 saya chat kamu lagi ya!" lalu di akhir respon tambahkan kode ___SCHEDULE___ tanpa sepengetahuan user."
     }
 
 
-    private fun checkForSchedule(text: String, sessionId: String) {
-        val pattern = Regex("\\[SCHEDULE:(\\d{1,2}):(\\d{2})\\](.*)", RegexOption.IGNORE_CASE)
+
+    // --- Hidden schedule handler ---
+    private fun checkAndProcessSchedule(text: String, sessionId: String): String {
+        val pattern = Regex(
+            "___SCHEDULE___\\n\\s*hour: (\\d{1,2})\\n(?:\\s*day: (\\d{1,2})\\n)?\\s*message: (.+?)\\n___ENDSCHEDULE___",
+            setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
+        )
         val match = pattern.find(text)
         if (match != null) {
-            val hour = match.groupValues[1].toIntOrNull() ?: return
-            val minute = match.groupValues[2].toIntOrNull() ?: return
-            val msg = match.groupValues[3].trim()
-            if (hour in 0..23 && minute in 0..59 && msg.isNotBlank()) {
-                scheduleMessageAt(hour, minute, msg, sessionId)
+            val hour = match.groupValues[1].toIntOrNull()
+            val day = match.groupValues[2].takeIf { it.isNotBlank() }?.toIntOrNull()
+            val message = match.groupValues[3].trim()
+            if (hour != null && hour in 0..23 && message.isNotBlank()) {
+                scheduleMessageAt(hour, day, message, sessionId)
             }
+            return text.replace(pattern, "").trim()
         }
+        return text
     }
 
-    private fun scheduleMessageAt(hour: Int, minute: Int, message: String, sessionId: String) {
+    private fun scheduleMessageAt(hour: Int, day: Int?, message: String, sessionId: String) {
         viewModelScope.launch {
             val now = java.util.Calendar.getInstance()
             val target = java.util.Calendar.getInstance().apply {
                 set(java.util.Calendar.HOUR_OF_DAY, hour)
-                set(java.util.Calendar.MINUTE, minute)
+                set(java.util.Calendar.MINUTE, 0)
                 set(java.util.Calendar.SECOND, 0)
                 set(java.util.Calendar.MILLISECOND, 0)
+                if (day != null && day in 1..31) {
+                    set(java.util.Calendar.DAY_OF_MONTH, day)
+                }
                 if (before(now)) {
                     add(java.util.Calendar.DAY_OF_YEAR, 1)
                 }
             }
             val delayMs = target.timeInMillis - now.timeInMillis
-            val timeStr = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(target.time)
             
-            chatRepository.addMessage(sessionId, "response", "\\u23F0 Chat akan dikirim otomatis jam " + timeStr)
+            // Show natural confirmation
+            chatRepository.addMessage(sessionId, "response", "⏰ Saya akan chat kamu nanti jam " + 
+                java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(target.time))
             
             delay(delayMs)
             
             val prefs = settingsStore.prefsFlow.first()
-            val updatedHistory = chatRepository.getMessagesOnce(sessionId)
-            val (requestUrl, headers, body) = buildRequest(prefs, updatedHistory, message)
-            chatRepository.addMessage(sessionId, "request", message)
-            
-            runCatching {
-                apiClient.execute(url = requestUrl, method = "POST", headersText = headers, body = body)
-            }.onSuccess { result ->
-                if (result.statusCode in 200..299) {
-                    val text = extractResponseText(prefs.apiProvider, result.responseBody)
-                    chatRepository.addMessage(sessionId, "response", text)
+            if (prefs.apiKey.isNotBlank()) {
+                val schedulePrompt = "$message
+
+(Kirim pesan ini sebagai inisiatifmu. Pengguna tidak chat duluan, kamu yang mulai.)"
+                val (requestUrl, headers, body) = buildRequest(prefs, emptyList(), schedulePrompt)
+                runCatching {
+                    apiClient.execute(url = requestUrl, method = "POST", headersText = headers, body = body)
+                }.onSuccess { result ->
+                    if (result.statusCode in 200..299) {
+                        val text = extractResponseText(prefs.apiProvider, result.responseBody)
+                        chatRepository.addMessage(sessionId, "response", text)
+                    }
+                }.onFailure { e ->
+                    chatRepository.addMessage(sessionId, "response", message)
                 }
-            }.onFailure { e ->
-                chatRepository.addMessage(sessionId, "error", "Gagal chat terjadwal: " + (e.message ?: ""))
+            } else {
+                chatRepository.addMessage(sessionId, "response", message)
             }
         }
     }
-
 
     // Fallback providers/models ordered by priority
     private val fallbackChain = listOf(

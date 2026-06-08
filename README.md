@@ -9,7 +9,7 @@ Android client AI generik dengan antarmuka seperti ChatGPT. Mendukung berbagai p
 - Preview pesan terakhir di setiap sesi
 - Cari sesi berdasarkan judul
 - Buat, pilih, rename, dan hapus sesi
-- **Edit pesan** — tap ikon edit pada pesan kamu untuk mengubah dan kirim ulang
+- **Edit pesan** — tap ikon edit pada pesan kamu untuk mengubah dan AI generate ulang respons
 - **Copy respons AI** — tap ikon copy, animasi check hijau
 - Auto-scroll ke pesan terbaru
 - Keyboard otomatis turun saat AI merespon
@@ -30,7 +30,9 @@ Setiap provider punya konfigurasi sendiri (API key, model, base URL, temperature
 ### 🧠 Memory & Konteks
 - **System prompt** kustom — atur kepribadian AI
 - **AI tau waktu** — otomatis inject info waktu ke system prompt
-- **Auto-greeting** — AI sapa duluan di sesi baru
+- **Auto-greeting** — AI sapa duluan di sesi baru (juga saat buat sesi baru)
+- **AI Chat Duluan** — AI bisa memulai obrolan tanpa perlu kamu chat duluan
+- **Jadwal Chat Natural** — Bilang "chat jam 8 malam", AI jawab natural dan otomatis chat kamu nanti (tanpa kode aneh)
 - **Backup & Restore** — simpan/muat memory AI ke file JSON
 
 ### 📡 Test Koneksi
