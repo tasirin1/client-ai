@@ -15,6 +15,9 @@ import com.example.aiclient.data.getDefaultBaseUrl
 import com.example.aiclient.data.getDefaultModel
 import com.example.aiclient.data.getProviderConfig
 import com.example.aiclient.data.setProviderConfig
+import com.example.aiclient.data.getAllProviderNames
+import com.example.aiclient.data.getModelsForProvider
+import com.example.aiclient.data.getFallbackChain
 import com.example.aiclient.network.ApiResult
 import com.example.aiclient.network.GenericApiClient
 import com.example.aiclient.network.toJsonString
@@ -881,7 +884,7 @@ Contoh: Jika user bilang "Chat jam 8 malam", jawab "Baik, nanti jam 8 saya chat 
 
     // Fallback providers/models ordered by priority
     private val fallbackChain: List<Pair<String, List<String>>> by lazy {
-        com.example.aiclient.data.getFallbackChain()
+        getFallbackChain()
     }
 
     private suspend fun tryFallback(sessionId: String, originalInput: String, errorHint: String): Boolean {
@@ -890,7 +893,7 @@ Contoh: Jika user bilang "Chat jam 8 malam", jawab "Baik, nanti jam 8 saya chat 
         val currentModel = prefs.model
         
         // Try the next model in current provider's model list
-        val allModels = com.example.aiclient.data.getModelsForProvider(currentProvider)
+        val allModels = getModelsForProvider(currentProvider)
         if (allModels.isEmpty()) return false
         val models = allModels
         
@@ -915,11 +918,11 @@ Contoh: Jika user bilang "Chat jam 8 malam", jawab "Baik, nanti jam 8 saya chat 
         }
         
         // Try ALL providers with API keys as last resort
-        for (provider in com.example.aiclient.data.getAllProviderNames()) {
+        for (provider in getAllProviderNames()) {
             if (provider == "Custom" || provider == currentProvider) continue
             val config = getProviderConfig(prefs, provider)
             if (config.apiKey.isNotBlank()) {
-                val firstModel = com.example.aiclient.data.getModelsForProvider(provider).firstOrNull() 
+                val firstModel = getModelsForProvider(provider).firstOrNull() 
                     ?: getDefaultModel(provider)
                 if (firstModel.isNotBlank()) {
                     return tryRetryWithModel(sessionId, originalInput, provider, firstModel)

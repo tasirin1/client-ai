@@ -102,6 +102,9 @@ import com.example.aiclient.data.AppPrefs
 import com.example.aiclient.ConnectionStatus
 import com.example.aiclient.data.MessageEntity
 import com.example.aiclient.data.SessionEntity
+import com.example.aiclient.data.getAllProviderNames
+import com.example.aiclient.data.getModelsForProvider
+import com.example.aiclient.data.getDefaultBaseUrl
 import com.example.aiclient.ui.AIClientTheme
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -162,9 +165,9 @@ class MainActivity : ComponentActivity() {
 }
 
 val modelsByProvider: Map<String, List<String>> by lazy {
-    com.example.aiclient.data.getAllProviderNames().associateWith { name ->
+    getAllProviderNames().associateWith { name ->
         if (name == "Custom") emptyList()
-        else com.example.aiclient.data.getModelsForProvider(name)
+        else getModelsForProvider(name)
     }
 }
 
@@ -829,41 +832,16 @@ private fun SettingsDialog(
     connectionError: String,
     onDismiss: () -> Unit,
 ) {
-    val providers = com.example.aiclient.data.getAllProviderNames()
-    val modelsByProvider = mapOf(
-        "OpenAI" to com.example.aiclient.data.getModelsForProvider("OpenAI"),
-        "Anthropic" to com.example.aiclient.data.getModelsForProvider("Anthropic"),
-        "Google" to com.example.aiclient.data.getModelsForProvider("Google"),
-        "Deepseek" to com.example.aiclient.data.getModelsForProvider("Deepseek"),
-        "Groq" to com.example.aiclient.data.getModelsForProvider("Groq"),
-        "OpenRouter" to com.example.aiclient.data.getModelsForProvider("OpenRouter"),
-        "Mistral" to com.example.aiclient.data.getModelsForProvider("Mistral"),
-        "xAI" to com.example.aiclient.data.getModelsForProvider("xAI"),
-        "Cohere" to com.example.aiclient.data.getModelsForProvider("Cohere"),
-        "Perplexity" to com.example.aiclient.data.getModelsForProvider("Perplexity"),
-        "Together AI" to com.example.aiclient.data.getModelsForProvider("Together AI"),
-        "Fireworks AI" to com.example.aiclient.data.getModelsForProvider("Fireworks AI"),
-        "GitHub Models" to com.example.aiclient.data.getModelsForProvider("GitHub Models"),
-        "AI21" to com.example.aiclient.data.getModelsForProvider("AI21"),
-        "Custom" to emptyList(),
-    )
-    val baseUrls = mapOf(
-        "OpenAI" to com.example.aiclient.data.getDefaultBaseUrl("OpenAI"),
-        "Anthropic" to com.example.aiclient.data.getDefaultBaseUrl("Anthropic"),
-        "Google" to com.example.aiclient.data.getDefaultBaseUrl("Google"),
-        "Deepseek" to com.example.aiclient.data.getDefaultBaseUrl("Deepseek"),
-        "Groq" to com.example.aiclient.data.getDefaultBaseUrl("Groq"),
-        "OpenRouter" to com.example.aiclient.data.getDefaultBaseUrl("OpenRouter"),
-        "Mistral" to com.example.aiclient.data.getDefaultBaseUrl("Mistral"),
-        "xAI" to com.example.aiclient.data.getDefaultBaseUrl("xAI"),
-        "Cohere" to com.example.aiclient.data.getDefaultBaseUrl("Cohere"),
-        "Perplexity" to com.example.aiclient.data.getDefaultBaseUrl("Perplexity"),
-        "Together AI" to com.example.aiclient.data.getDefaultBaseUrl("Together AI"),
-        "Fireworks AI" to com.example.aiclient.data.getDefaultBaseUrl("Fireworks AI"),
-        "GitHub Models" to com.example.aiclient.data.getDefaultBaseUrl("GitHub Models"),
-        "AI21" to com.example.aiclient.data.getDefaultBaseUrl("AI21"),
-        "Custom" to prefs.baseUrl,
-    )
+    val providers = getAllProviderNames()
+    val modelsByProvider: Map<String, List<String>> = 
+        providers.associateWith { name ->
+            if (name == "Custom") emptyList()
+            else getModelsForProvider(name)
+        }
+    val baseUrls = providers.associateWith { name ->
+        if (name == "Custom") prefs.baseUrl
+        else getDefaultBaseUrl(name)
+    }
 
     val selectedProvider = remember(prefs.apiProvider) { mutableStateOf(prefs.apiProvider) }
     val selectedModel = remember(prefs.apiProvider, prefs.model) { mutableStateOf(prefs.model) }
