@@ -5,6 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.fadeIn
@@ -1248,60 +1250,52 @@ private fun doRestoreFromUri(vm: AppViewModel, uri: android.net.Uri, ctx: androi
 
 @Composable
 private fun TypingIndicator() {
-    val infiniteTransition = rememberInfiniteTransition()
-    val dotAlpha = listOf(
-        infiniteTransition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 1.0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(600, delayMillis = 0),
-                repeatMode = RepeatMode.Reverse,
-            ),
-        ),
-        infiniteTransition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 1.0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(600, delayMillis = 200),
-                repeatMode = RepeatMode.Reverse,
-            ),
-        ),
-        infiniteTransition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 1.0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(600, delayMillis = 400),
-                repeatMode = RepeatMode.Reverse,
-            ),
-        ),
-    )
+    // ChatGPT-style typing animation
+    val dotCount = 3
+    val dotVisible = remember { mutableStateOf(0) }
     
-    Column(
+    LaunchedEffect(Unit) {
+        while (true) {
+            dotVisible.value = 0
+            delay(200)
+            dotVisible.value = 1
+            delay(200)
+            dotVisible.value = 2
+            delay(200)
+            dotVisible.value = 3
+            delay(600)
+        }
+    }
+    
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 8.dp, top = 4.dp, bottom = 8.dp),
-        horizontalAlignment = Alignment.Start,
+            .padding(start = 12.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            // Three animated dots
-            for (i in 0 until 3) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .graphicsLayer(alpha = dotAlpha[i].value)
-                        .background(Color(0xFF10A37F), CircleShape)
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                "AI sedang mengetik...",
-                color = Color(0xFF666666),
-                fontSize = 13.sp,
+        for (i in 0 until dotCount) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(
+                        if (i < dotVisible.value) Color(0xFF10A37F) else Color(0xFF333333),
+                        CircleShape
+                    )
             )
         }
+        Spacer(modifier = Modifier.width(8.dp))
+        CircularProgressIndicator(
+            modifier = Modifier.size(14.dp),
+            color = Color(0xFF10A37F),
+            strokeWidth = 2.dp,
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            "AI mengetik...",
+            color = Color(0xFF888888),
+            fontSize = 13.sp,
+        )
     }
 }
 
