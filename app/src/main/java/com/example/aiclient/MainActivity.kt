@@ -260,7 +260,7 @@ private fun MainScreen(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Icon(
-                                    Icons.Default.ArrowDropDown,
+                                    Icons.Default.ExpandMore,
                                     contentDescription = null,
                                     tint = Color(0xFF10A37F),
                                     modifier = Modifier.size(14.dp),
@@ -764,7 +764,7 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String) -> Unit)? = nul
                                     modifier = Modifier.size(28.dp),
                                 ) {
                                     Icon(
-                                        if (showCopied.value) Icons.Default.CheckCircle else Icons.Default.ContentCopy,
+                                        if (showCopied.value) Icons.Default.CheckCircleOutline else Icons.Default.ContentCopy,
                                         contentDescription = "Salin",
                                         tint = if (showCopied.value) Color(0xFF10A37F) else Color(0xFF666666),
                                         modifier = Modifier.size(16.dp),
