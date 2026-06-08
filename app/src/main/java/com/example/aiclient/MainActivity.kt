@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
@@ -82,6 +83,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -579,24 +581,7 @@ private fun ChatArea(
             }
             if (isLoading) {
                 item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 16.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = Color(0xFF10A37F),
-                                strokeWidth = 2.dp,
-                            )
-                            Text("Memproses...", color = Color(0xFF888888), fontSize = 14.sp)
-                        }
-                    }
+                    TypingIndicator()
                 }
             }
         }
@@ -1257,6 +1242,65 @@ private fun doRestoreFromUri(vm: AppViewModel, uri: android.net.Uri, ctx: androi
             }
         } catch (e: Exception) {
             android.widget.Toast.makeText(ctx, "Restore gagal: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+}
+
+@Composable
+private fun TypingIndicator() {
+    val infiniteTransition = rememberInfiniteTransition()
+    val dotAlpha = listOf(
+        infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(600, delayMillis = 0),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        ),
+        infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(600, delayMillis = 200),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        ),
+        infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(600, delayMillis = 400),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        ),
+    )
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, top = 4.dp, bottom = 8.dp),
+        horizontalAlignment = Alignment.Start,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // Three animated dots
+            for (i in 0 until 3) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .graphicsLayer(alpha = dotAlpha[i].value)
+                        .background(Color(0xFF10A37F), CircleShape)
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "AI sedang mengetik...",
+                color = Color(0xFF666666),
+                fontSize = 13.sp,
+            )
         }
     }
 }
