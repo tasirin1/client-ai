@@ -786,7 +786,7 @@ class AppViewModel(
             val (requestUrl, headers, body) = buildRequest(prefs, updatedHistory, message)
             chatRepository.addMessage(sessionId, "request", message)
             
-            kotlinx.coroutines.runCatching {
+            runCatching {
                 apiClient.execute(url = requestUrl, method = "POST", headersText = headers, body = body)
             }.onSuccess { result ->
                 if (result.statusCode in 200..299) {
