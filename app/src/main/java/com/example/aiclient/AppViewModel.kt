@@ -969,6 +969,24 @@ Contoh: Jika user bilang "Chat jam 8 malam", jawab "Baik, nanti jam 8 saya chat 
         return false
     }
 
+    fun addCustomModel(model: String) {
+        viewModelScope.launch {
+            val prefs = settingsStore.prefsFlow.first()
+            val provider = prefs.apiProvider
+            val newConfigs = com.example.aiclient.data.addCustomModel(prefs, provider, model)
+            settingsStore.update { it.copy(providerConfigs = newConfigs) }
+        }
+    }
+
+    fun removeCustomModel(model: String) {
+        viewModelScope.launch {
+            val prefs = settingsStore.prefsFlow.first()
+            val provider = prefs.apiProvider
+            val newConfigs = com.example.aiclient.data.removeCustomModel(prefs, provider, model)
+            settingsStore.update { it.copy(providerConfigs = newConfigs) }
+        }
+    }
+
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory {
             return object : ViewModelProvider.Factory {

@@ -155,6 +155,8 @@ class MainActivity : ComponentActivity() {
                     },
 
                     onRestore = { restoreLauncher.launch(arrayOf("application/json")) },
+                    onAddCustomModel = vm::addCustomModel,
+                    onRemoveCustomModel = vm::removeCustomModel,
                     connectionStatus = uiState.connectionStatus,
                     connectionError = uiState.connectionError,
 
@@ -191,6 +193,8 @@ private fun MainScreen(
     onTestConnection: () -> Unit,
     onBackup: () -> Unit,
     onRestore: () -> Unit,
+    onAddCustomModel: (String) -> Unit = {},
+    onRemoveCustomModel: (String) -> Unit = {},
     connectionStatus: ConnectionStatus,
     connectionError: String,
 ) {
@@ -314,6 +318,8 @@ private fun MainScreen(
             onTestConnection = onTestConnection,
             onBackup = onBackup,
             onRestore = onRestore,
+            onAddCustomModel = onAddCustomModel,
+            onRemoveCustomModel = onRemoveCustomModel,
             connectionStatus = connectionStatus,
             connectionError = connectionError,
             onDismiss = { showSettings.value = false },
@@ -828,6 +834,8 @@ private fun SettingsDialog(
     onTestConnection: () -> Unit,
     onBackup: () -> Unit,
     onRestore: () -> Unit,
+    onAddCustomModel: (String) -> Unit = {},
+    onRemoveCustomModel: (String) -> Unit = {},
     connectionStatus: ConnectionStatus,
     connectionError: String,
     onDismiss: () -> Unit,
@@ -845,15 +853,15 @@ private fun SettingsDialog(
 
     val selectedProvider = remember(prefs.apiProvider) { mutableStateOf(prefs.apiProvider) }
     val selectedModel = remember(prefs.apiProvider, prefs.model) { mutableStateOf(prefs.model) }
-    val customModel = remember { mutableStateOf("") }
     val apiKey = remember(prefs.apiProvider, prefs.apiKey) { mutableStateOf(prefs.apiKey) }
     val baseUrl = remember(prefs.apiProvider, prefs.baseUrl) { mutableStateOf(prefs.baseUrl) }
     val temperature = remember(prefs.apiProvider) { mutableFloatStateOf(prefs.temperature) }
     val maxTokens = remember(prefs.apiProvider) { mutableStateOf(prefs.maxTokens.toString()) }
     val systemPrompt = remember { mutableStateOf(prefs.globalMemory) }
     val showApiKey = remember { mutableStateOf(false) }
-    val showCustomModelInput = remember(selectedProvider.value, selectedModel.value) { mutableStateOf(selectedProvider.value == "Custom" || !modelsByProvider[selectedProvider.value]?.contains(selectedModel.value)!!) }
     val availableModels = modelsByProvider[selectedProvider.value] ?: emptyList()
+    val customModels = remember(selectedProvider.value) { mutableStateOf(com.example.aiclient.data.getCustomModels(prefs, selectedProvider.value)) }
+    val newCustomModel = remember { mutableStateOf("") }
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
@@ -933,53 +941,107 @@ private fun SettingsDialog(
 
                 // Model selection
                 Text("Model", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                if (showCustomModelInput.value) {
-                    OutlinedTextField(
-                        value = if (selectedProvider.value == "Custom") customModel.value else selectedModel.value,
-                        onValueChange = {
-                            if (selectedProvider.value == "Custom") {
-                                customModel.value = it
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // Default models
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    ) {
+                        availableModels.forEach { model ->
+                            val isSelected = selectedModel.value == model
+                            OutlinedButton(
+                                onClick = {
+                                    selectedModel.value = model
+                                    onUpdateModel(model)
+                                },
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = if (isSelected) Color(0xFF10A37F) else Color(0xFF888888),
+                                ),
+                            ) {
+                                Text(model, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            selectedModel.value = it
-                            onUpdateModel(it)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Nama model...", color = Color(0xFF555555)) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF10A37F),
-                            unfocusedBorderColor = Color(0xFF333333),
-                            cursorColor = Color(0xFF10A37F),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedContainerColor = Color(0xFF121212),
-                            unfocusedContainerColor = Color(0xFF121212),
-                        ),
-                        shape = RoundedCornerShape(8.dp),
-                    )
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        }
+                    }
+                    // Custom models for this provider
+                    if (customModels.value.isNotEmpty()) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
                         ) {
-                            availableModels.forEach { model ->
+                            customModels.value.forEach { model ->
                                 val isSelected = selectedModel.value == model
-                                OutlinedButton(
-                                    onClick = {
-                                        selectedModel.value = model
-                                        onUpdateModel(model)
-                                    },
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        contentColor = if (isSelected) Color(0xFF10A37F) else Color(0xFF888888),
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.background(
+                                        if (isSelected) Color(0xFF10A37F).copy(alpha=0.15f) else Color.Transparent,
+                                        RoundedCornerShape(8.dp)
                                     ),
                                 ) {
-                                    Text(model, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    OutlinedButton(
+                                        onClick = {
+                                            selectedModel.value = model
+                                            onUpdateModel(model)
+                                        },
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            contentColor = if (isSelected) Color(0xFF10A37F) else Color(0xFFBBBBBB),
+                                        ),
+                                        modifier = Modifier.padding(end = 0.dp),
+                                    ) {
+                                        Text(model, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            onRemoveCustomModel(model)
+                                            customModels.value = customModels.value - model
+                                        },
+                                        modifier = Modifier.size(20.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Hapus",
+                                            tint = Color(0xFF666666),
+                                            modifier = Modifier.size(14.dp),
+                                        )
+                                    }
                                 }
                             }
                         }
-                        TextButton(onClick = { showCustomModelInput.value = true }) {
-                            Text("+ Model kustom", color = Color(0xFF10A37F), fontSize = 12.sp)
+                    }
+                    // Add custom model input
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = newCustomModel.value,
+                            onValueChange = { newCustomModel.value = it },
+                            placeholder = { Text("Nama model kustom...", color = Color(0xFF555555)) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF10A37F),
+                                unfocusedBorderColor = Color(0xFF333333),
+                                cursorColor = Color(0xFF10A37F),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedContainerColor = Color(0xFF121212),
+                                unfocusedContainerColor = Color(0xFF121212),
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                        )
+                        Button(
+                            onClick = {
+                                val m = newCustomModel.value.trim()
+                                if (m.isNotBlank()) {
+                                    onAddCustomModel(m)
+                                    customModels.value = customModels.value + m
+                                    newCustomModel.value = ""
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Text("Tambah", fontSize = 11.sp, color = Color.White)
                         }
                     }
                 }

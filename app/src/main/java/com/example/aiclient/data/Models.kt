@@ -208,6 +208,21 @@ fun getFallbackChain(): List<Pair<String, List<String>>> =
 fun getApiType(provider: String): String =
     providerMap[provider]?.apiType ?: "openai"
 
+fun getCustomModels(prefs: AppPrefs, provider: String): List<String> =
+    getProviderConfig(prefs, provider).customModels
+
+fun addCustomModel(prefs: AppPrefs, provider: String, model: String): String {
+    val config = getProviderConfig(prefs, provider)
+    val updated = config.copy(customModels = (config.customModels + model).distinct())
+    return setProviderConfig(prefs, provider, updated)
+}
+
+fun removeCustomModel(prefs: AppPrefs, provider: String, model: String): String {
+    val config = getProviderConfig(prefs, provider)
+    val updated = config.copy(customModels = config.customModels - model)
+    return setProviderConfig(prefs, provider, updated)
+}
+
 
 // --- Per-provider config helpers ---
 fun getProviderConfig(prefs: AppPrefs, provider: String): ProviderConfig {
@@ -215,12 +230,17 @@ fun getProviderConfig(prefs: AppPrefs, provider: String): ProviderConfig {
         val json = org.json.JSONObject(prefs.providerConfigs)
         if (json.has(provider)) {
             val cfg = json.getJSONObject(provider)
+            val cmArr = cfg.optJSONArray("customModels")
+            val cmList = if (cmArr != null) {
+                (0 until cmArr.length()).map { cmArr.optString(it, "") }.filter { it.isNotBlank() }
+            } else emptyList()
             ProviderConfig(
                 apiKey = cfg.optString("apiKey", ""),
                 model = cfg.optString("model", getDefaultModel(provider)),
                 baseUrl = cfg.optString("baseUrl", getDefaultBaseUrl(provider)),
                 temperature = cfg.optDouble("temperature", 0.7).toFloat(),
                 maxTokens = cfg.optInt("maxTokens", 4096),
+                customModels = cmList,
             )
         } else ProviderConfig()
     } catch (_: Exception) { ProviderConfig() }
@@ -235,6 +255,8 @@ fun setProviderConfig(prefs: AppPrefs, provider: String, config: ProviderConfig)
         cfg.put("baseUrl", config.baseUrl)
         cfg.put("temperature", config.temperature.toDouble())
         cfg.put("maxTokens", config.maxTokens)
+        val cmArr = org.json.JSONArray(config.customModels)
+        cfg.put("customModels", cmArr)
         json.put(provider, cfg)
         json.toString(2)
     } catch (_: Exception) { prefs.providerConfigs }
@@ -246,6 +268,7 @@ data class ProviderConfig(
     val baseUrl: String = "",
     val temperature: Float = 0.7f,
     val maxTokens: Int = 4096,
+    val customModels: List<String> = emptyList(),
     val providerConfigs: String = "{}",
 )
 
