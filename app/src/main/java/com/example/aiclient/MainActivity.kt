@@ -250,13 +250,7 @@ private fun MainScreen(
                                 softWrap = true,
                                 fontSize = 16.sp,
                             )
-                            Text(
-                                text = uiState.prefs.model,
-                                color = Color(0xFF10A37F),
-                                fontSize = 11.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+
                         }
                     },
                     navigationIcon = {

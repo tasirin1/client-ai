@@ -402,9 +402,15 @@ class AppViewModel(
                         body = body,
                     )
                 }.onSuccess { result ->
-                    handleSuccess(session.id, result, inputForRename)
+                    if (result.statusCode >= 400) {
+                        val fallback = tryFallback(session.id, input, result.responseBody)
+                        if (!fallback) handleSuccess(session.id, result, inputForRename)
+                    } else {
+                        handleSuccess(session.id, result, inputForRename)
+                    }
                 }.onFailure { throwable ->
-                    handleError(session.id, input.ifBlank { body }, throwable)
+                    val fallback = tryFallback(session.id, input, throwable.message ?: "")
+                    if (!fallback) handleError(session.id, input.ifBlank { body }, throwable)
                 }
             } finally {
                 loading.value = false
@@ -845,6 +851,100 @@ class AppViewModel(
                 chatRepository.addMessage(sessionId, "error", "Gagal chat terjadwal: " + (e.message ?: ""))
             }
         }
+    }
+
+
+    // Fallback providers/models ordered by priority
+    private val fallbackChain = listOf(
+        "OpenRouter" to listOf("openai/gpt-4o-mini", "google/gemini-2.0-flash", "meta-llama/llama-3.3-70b-instruct"),
+        "OpenAI" to listOf("gpt-4o-mini", "gpt-3.5-turbo"),
+        "Groq" to listOf("llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it"),
+        "Deepseek" to listOf("deepseek-chat", "deepseek-reasoner"),
+    )
+
+    private suspend fun tryFallback(sessionId: String, originalInput: String, errorHint: String): Boolean {
+        val prefs = settingsStore.prefsFlow.first()
+        val currentProvider = prefs.apiProvider
+        val currentModel = prefs.model
+        
+        // Try the next model in current provider's model list
+        val models = when (currentProvider) {
+            "OpenAI" -> listOf("gpt-4o-mini", "gpt-3.5-turbo", "gpt-4o")
+            "Anthropic" -> listOf("claude-3-haiku-20240307", "claude-3-5-sonnet-20241022")
+            "Google" -> listOf("gemini-1.5-flash", "gemini-1.5-pro")
+            "Deepseek" -> listOf("deepseek-chat", "deepseek-reasoner")
+            "Groq" -> listOf("llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it")
+            "OpenRouter" -> listOf("openai/gpt-4o-mini", "google/gemini-2.0-flash")
+            else -> return false
+        }
+        
+        val currentModelIndex = models.indexOf(currentModel)
+        if (currentModelIndex >= 0 && currentModelIndex < models.lastIndex) {
+            val nextModel = models[currentModelIndex + 1]
+            // Try next model in same provider
+            return tryRetryWithModel(sessionId, originalInput, currentProvider, nextModel)
+        }
+        
+        // Try next provider
+        val chainProviders = fallbackChain.map { it.first }
+        val currentProviderIndex = chainProviders.indexOf(currentProvider)
+        val nextProviderIndex = currentProviderIndex + 1
+        
+        if (nextProviderIndex < fallbackChain.size) {
+            val (nextProvider, nextModels) = fallbackChain[nextProviderIndex]
+            val savedConfig = getProviderConfig(prefs, nextProvider)
+            if (savedConfig.apiKey.isNotBlank() && nextModels.isNotEmpty()) {
+                return tryRetryWithModel(sessionId, originalInput, nextProvider, nextModels[0])
+            }
+        }
+        
+        // Try open models on OpenRouter as last resort
+        for (provider in chainProviders) {
+            val config = getProviderConfig(prefs, provider)
+            if (config.apiKey.isNotBlank() && provider != currentProvider) {
+                return tryRetryWithModel(sessionId, originalInput, provider, 
+                    if (provider == "OpenRouter") "openai/gpt-4o-mini" 
+                    else getDefaultModel(provider))
+            }
+        }
+        
+        return false
+    }
+
+    private suspend fun tryRetryWithModel(sessionId: String, input: String, provider: String, model: String): Boolean {
+        try {
+            val prefs = settingsStore.prefsFlow.first()
+            val config = getProviderConfig(prefs, provider)
+            if (config.apiKey.isBlank()) return false
+            
+            // Temporarily switch to fallback config
+            val fallbackPrefs = prefs.copy(
+                apiProvider = provider,
+                apiKey = config.apiKey,
+                model = model,
+                baseUrl = config.baseUrl.ifBlank { getDefaultBaseUrl(provider) },
+                temperature = config.temperature,
+                maxTokens = config.maxTokens,
+            )
+            
+            val history = chatRepository.getMessagesOnce(sessionId)
+            val (requestUrl, headers, body) = buildRequest(fallbackPrefs, history, input)
+            
+            val result = apiClient.execute(url = requestUrl, method = "POST", headersText = headers, body = body)
+            if (result.statusCode in 200..299) {
+                val text = extractResponseText(provider, result.responseBody)
+                responseBody.value = text
+                chatRepository.addMessage(sessionId, "response", text)
+                
+                // Auto-rename with fallback prefix
+                val session = chatRepository.getSessionOnce(sessionId)
+                if (session?.title?.startsWith("Chat") != false || session?.title?.startsWith("Sesi") != false) {
+                    chatRepository.renameSession(sessionId, input.take(28).trim().ifBlank { "Chat (${provider.first()})" })
+                }
+                return true
+            }
+        } catch (_: Exception) { }
+        return false
     }
 
     companion object {
