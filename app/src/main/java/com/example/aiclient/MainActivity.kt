@@ -153,6 +153,16 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+val modelsByProvider = mapOf(
+    "OpenAI" to listOf("gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1", "o1-mini", "o3-mini"),
+    "Anthropic" to listOf("claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"),
+    "Google" to listOf("gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.0-pro"),
+    "Deepseek" to listOf("deepseek-chat", "deepseek-reasoner"),
+    "Groq" to listOf("gemma2-9b-it", "mixtral-8x7b-32768", "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama-guard-3-8b", "llama3-70b-8192", "llama3-8b-8192", "deepseek-r1-distill-llama-70b"),
+    "OpenRouter" to listOf("openai/gpt-4o", "openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "google/gemini-2.0-flash", "meta-llama/llama-3.3-70b-instruct", "deepseek/deepseek-r1", "mistralai/mistral-small-24b-instruct"),
+    "Custom" to emptyList(),
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainScreen(
@@ -180,6 +190,7 @@ private fun MainScreen(
     val showSettings = rememberSaveable { mutableStateOf(false) }
     val chatListState = rememberLazyListState()
     var inputText by remember { mutableStateOf("") }
+    var showModelMenu by remember { mutableStateOf(false) }
     // Auto-scroll when new messages arrive
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
@@ -218,14 +229,64 @@ private fun MainScreen(
             topBar = {
                 TopAppBar(
                     title = {
-                        val currentSession = uiState.sessions.find { it.session.id == uiState.currentSessionId }
-                        Text(
-                            text = currentSession?.session?.title ?: "AI Client",
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                                            softWrap = true,
-                        )
+                        Column {
+                            val currentSession = uiState.sessions.find { it.session.id == uiState.currentSessionId }
+                            Text(
+                                text = currentSession?.session?.title ?: "AI Client",
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = true,
+                                fontSize = 16.sp,
+                            )
+                            // Model selector
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable { showModelMenu.value = true }
+                            ) {
+                                Text(
+                                    text = uiState.prefs.model,
+                                    color = Color(0xFF10A37F),
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Icon(
+                                    Icons.Default.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = Color(0xFF10A37F),
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showModelMenu.value,
+                                onDismissRequest = { showModelMenu.value = false }
+                            ) {
+                                val models = modelsByProvider[uiState.prefs.apiProvider] ?: emptyList()
+                                if (models.isEmpty()) {
+                                    DropdownMenuItem(
+                                        text = { Text(uiState.prefs.model, fontSize = 13.sp) },
+                                        onClick = { showModelMenu.value = false }
+                                    )
+                                } else {
+                                    models.forEach { model ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    model,
+                                                    fontSize = 13.sp,
+                                                    color = if (model == uiState.prefs.model) Color(0xFF10A37F) else Color(0xFFE0E0E0),
+                                                )
+                                            },
+                                            onClick = {
+                                                onUpdateModel(model)
+                                                showModelMenu.value = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
