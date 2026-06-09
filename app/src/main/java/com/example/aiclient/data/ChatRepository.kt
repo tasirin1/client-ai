@@ -61,7 +61,7 @@ class ChatRepository(
         chatDao.upsertSession(session)
     }
 
-    suspend fun addMessage(sessionId: String, role: String, content: String) {
+    suspend fun addMessage(sessionId: String, role: String, content: String, imageBase64: String = "") {
         val now = System.currentTimeMillis()
         chatDao.upsertMessage(
             MessageEntity(
@@ -71,6 +71,7 @@ class ChatRepository(
                 content = content,
                 createdAt = now,
                 timestamp = now,
+                imageBase64 = imageBase64,
             ),
         )
     }

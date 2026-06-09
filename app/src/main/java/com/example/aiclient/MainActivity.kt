@@ -4,6 +4,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -41,6 +49,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -141,7 +150,7 @@ class MainActivity : ComponentActivity() {
                     onCreateSession = vm::createSession,
                     onSelectSession = vm::updateActiveSession,
                     onDeleteSession = vm::deleteSession,
-                    onSend = { text -> vm.sendRequest(text) },
+                    onSend = { text, img -> vm.sendRequest(text, img) },
                     onEditMessage = { msgId, text -> vm.editMessageAndRegenerate(msgId, text) },
                     onSessionSearch = vm::updateSessionSearch,
                     onUpdateApiKey = vm::updateApiKey,
@@ -183,7 +192,7 @@ private fun MainScreen(
     onCreateSession: () -> Unit,
     onSelectSession: (String) -> Unit,
     onDeleteSession: (String) -> Unit,
-    onSend: (String) -> Unit,
+    onSend: (String, String) -> Unit,
     onEditMessage: ((String, String) -> Unit) = { _, _ -> },
     onSessionSearch: (String) -> Unit,
     onUpdateApiKey: (String) -> Unit,
@@ -295,8 +304,8 @@ private fun MainScreen(
                 )
 
                 ComposerBar(
-                    onSend = { text ->
-                        onSend(text)
+                    onSend = { text, img ->
+                        onSend(text, img)
                     },
                     isLoading = uiState.isLoading,
                 )
@@ -648,6 +657,27 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
                 ),
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
+                    if (message.imageBase64.isNotBlank()) {
+                        val decoded = remember(message.imageBase64) {
+                            try {
+                                val bytes = android.util.Base64.decode(message.imageBase64, android.util.Base64.NO_WRAP)
+                                val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                if (bitmap != null) bitmap.asImageBitmap() else null
+                            } catch (_: Exception) { null }
+                        }
+                        if (decoded != null) {
+                            Image(
+                                bitmap = decoded,
+                                contentDescription = "Gambar",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 200.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Fit,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
                     if (editing && isUser) {
                         OutlinedTextField(
                             value = editText,
@@ -750,11 +780,24 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
 
 @Composable
 private fun ComposerBar(
-    onSend: (String) -> Unit,
+    onSend: (String, String) -> Unit,
     isLoading: Boolean,
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     var inputText by remember { mutableStateOf("") }
+    var imageBase64 by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bytes = inputStream?.use { it.readBytes() } ?: return@rememberLauncherForActivityResult
+                imageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            } catch (_: Exception) { }
+        }
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
@@ -790,24 +833,56 @@ private fun ComposerBar(
                 ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = {
-                    if (!isLoading && inputText.isNotBlank()) {
+                    if (!isLoading && (inputText.isNotBlank() || imageBase64.isNotBlank())) {
                         keyboardController?.hide()
                         val text = inputText
+                        val img = imageBase64
                         inputText = ""
-                        onSend(text)
+                        imageBase64 = ""
+                        onSend(text, img)
                     }
                 }),
                 shape = RoundedCornerShape(12.dp),
             )
+            if (imageBase64.isNotBlank()) {
+                IconButton(
+                    onClick = {
+                        imageBase64 = ""
+                    },
+                    modifier = Modifier.size(24.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Hapus gambar",
+                        tint = Color(0xFF10A37F),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+            IconButton(
+                onClick = {
+                    imagePickerLauncher.launch("image/*")
+                },
+                modifier = Modifier.size(24.dp),
+            ) {
+                Icon(
+                    Icons.Default.AttachFile,
+                    contentDescription = "Lampirkan gambar",
+                    tint = if (imageBase64.isNotBlank()) Color(0xFF10A37F) else Color(0xFF666666),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = {
                     keyboardController?.hide()
                     val text = inputText
+                    val img = imageBase64
                     inputText = ""
-                    onSend(text)
+                    imageBase64 = ""
+                    onSend(text, img)
                 },
-                enabled = !isLoading && inputText.isNotBlank(),
+                enabled = !isLoading && (inputText.isNotBlank() || imageBase64.isNotBlank()),
                 shape = CircleShape,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF10A37F),

@@ -41,6 +41,7 @@ data class MessageEntity(
     val content: String,
     val createdAt: Long,
     val timestamp: Long = createdAt,
+    val imageBase64: String = "",
 )
 
 // --- Provider metadata (single source of truth) ---

@@ -341,7 +341,7 @@ class AppViewModel(
         }
     }
     // --- Send Request ---
-    fun sendRequest(input: String = "") {
+    fun sendRequest(input: String = "", imageBase64: String = "") {
         viewModelScope.launch {
             loading.value = true
             try {
@@ -358,10 +358,10 @@ class AppViewModel(
                 val session = ensureCurrentSession(prefs)
                 // Load messages from ALL sessions for cross-session memory
                 val allHistory = chatRepository.getAllMessagesOnce()
-                val inputForRename = input.take(28).trim()
-                val (requestUrl, headers, body) = buildRequest(prefs, allHistory, input)
-                if (input.isNotBlank()) {
-                    chatRepository.addMessage(session.id, "request", input)
+                val inputForRename = (if (input.isNotBlank()) input else "Gambar").take(28).trim()
+                val (requestUrl, headers, body) = buildRequest(prefs, allHistory, input, imageBase64)
+                if (input.isNotBlank() || imageBase64.isNotBlank()) {
+                    chatRepository.addMessage(session.id, "request", input, imageBase64)
                 }
                 runCatching {
                     apiClient.execute(
@@ -372,21 +372,23 @@ class AppViewModel(
                     )
                 }.onSuccess { result ->
                     if (result.statusCode >= 400) {
-                        val fallback = tryFallback(session.id, input, result.responseBody)
+                        val fbInput = if (input.isNotBlank()) input else imageBase64.take(100)
+                        val fallback = tryFallback(session.id, fbInput, result.responseBody, imageBase64)
                         if (!fallback) handleSuccess(session.id, result, inputForRename)
                     } else {
                         handleSuccess(session.id, result, inputForRename)
                     }
                 }.onFailure { throwable ->
-                    val fallback = tryFallback(session.id, input, throwable.message ?: "")
-                    if (!fallback) handleError(session.id, input.ifBlank { body }, throwable)
+                    val fbInput = if (input.isNotBlank()) input else imageBase64.take(100)
+                    val fallback = tryFallback(session.id, fbInput, throwable.message ?: "", imageBase64)
+                    if (!fallback) handleError(session.id, fbInput.ifBlank { body }, throwable)
                 }
             } finally {
                 loading.value = false
             }
         }
     }
-    fun editMessageAndRegenerate(messageId: String, newContent: String) {
+    fun editMessageAndRegenerate(messageId: String, newContent: String, imageBase64: String = "") {
         viewModelScope.launch {
             loading.value = true
             try {
@@ -414,7 +416,7 @@ class AppViewModel(
                 // Send request with all history + new message
                 errorMessage.value = ""
                 val allHistory = chatRepository.getAllMessagesOnce()
-                val (requestUrl, headers, body) = buildRequest(prefs, allHistory, newContent)
+                val (requestUrl, headers, body) = buildRequest(prefs, allHistory, newContent, imageBase64)
                 runCatching {
                     apiClient.execute(url = requestUrl, method = "POST", headersText = headers, body = body)
                 }.onSuccess { result ->
@@ -441,18 +443,18 @@ class AppViewModel(
         )
         return Triple(prefs.baseUrl.ifBlank { prefs.endpointUrl }, prefs.defaultHeaders, renderedBody)
     }
-    private fun buildRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Triple<String, String, String> {
+    private fun buildRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String, imageBase64: String = ""): Triple<String, String, String> {
         if (prefs.apiKey.isBlank()) {
             val (h, b) = buildCustomRequest(prefs, history, input)
             return Triple(prefs.baseUrl.ifBlank { prefs.endpointUrl }, h, b)
         }
         return when (prefs.apiProvider) {
-            "Google" -> buildGoogleRequest(prefs, history, input)
-            "Anthropic" -> buildAnthropicRequest(prefs, history, input)
-            else -> buildOpenAiRequest(prefs, history, input)
+            "Google" -> buildGoogleRequest(prefs, history, input, imageBase64)
+            "Anthropic" -> buildAnthropicRequest(prefs, history, input, imageBase64)
+            else -> buildOpenAiRequest(prefs, history, input, imageBase64)
         }
     }
-    private fun buildOpenAiRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Triple<String, String, String> {
+    private fun buildOpenAiRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String, imageBase64: String = ""): Triple<String, String, String> {
         val headers = buildString {
             append("Content-Type: application/json\n")
             append("Authorization: Bearer ${prefs.apiKey}")
@@ -495,7 +497,7 @@ class AppViewModel(
         }
         return Triple(prefs.baseUrl, headers, body)
     }
-    private fun buildGoogleRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Triple<String, String, String> {
+    private fun buildGoogleRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String, imageBase64: String = ""): Triple<String, String, String> {
         val url = prefs.baseUrl.trimEnd('/') + "/${prefs.model}:generateContent?key=${prefs.apiKey}"
         val headers = "Content-Type: application/json"
         val contents = mutableListOf<String>()
@@ -535,7 +537,7 @@ class AppViewModel(
         }
         return Triple(url, headers, body)
     }
-    private fun buildAnthropicRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String): Triple<String, String, String> {
+    private fun buildAnthropicRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String, imageBase64: String = ""): Triple<String, String, String> {
         val headers = buildString {
             append("Content-Type: application/json\n")
             append("x-api-key: ${prefs.apiKey}\n")
@@ -752,7 +754,7 @@ Kamu adalah asisten AI yang membantu dan ramah."""
     private val fallbackChain: List<Pair<String, List<String>>> by lazy {
         getFallbackChain()
     }
-    private suspend fun tryFallback(sessionId: String, originalInput: String, errorHint: String): Boolean {
+    private suspend fun tryFallback(sessionId: String, originalInput: String, errorHint: String, imageBase64: String = ""): Boolean {
         val prefs = settingsStore.prefsFlow.first()
         val currentProvider = prefs.apiProvider
         val currentModel = prefs.model
@@ -764,7 +766,7 @@ Kamu adalah asisten AI yang membantu dan ramah."""
         if (currentModelIndex >= 0 && currentModelIndex < models.lastIndex) {
             val nextModel = models[currentModelIndex + 1]
             // Try next model in same provider
-            return tryRetryWithModel(sessionId, originalInput, currentProvider, nextModel)
+            return tryRetryWithModel(sessionId, originalInput, currentProvider, nextModel, imageBase64)
         }
         // Try next provider
         val chainProviders = fallbackChain.map { it.first }
@@ -774,7 +776,7 @@ Kamu adalah asisten AI yang membantu dan ramah."""
             val (nextProvider, nextModels) = fallbackChain[nextProviderIndex]
             val savedConfig = getProviderConfig(prefs, nextProvider)
             if (savedConfig.apiKey.isNotBlank() && nextModels.isNotEmpty()) {
-                return tryRetryWithModel(sessionId, originalInput, nextProvider, nextModels[0])
+                return tryRetryWithModel(sessionId, originalInput, nextProvider, nextModels[0], imageBase64)
             }
         }
         // Try ALL providers with API keys as last resort
@@ -785,13 +787,13 @@ Kamu adalah asisten AI yang membantu dan ramah."""
                 val firstModel = getModelsForProvider(provider).firstOrNull() 
                     ?: getDefaultModel(provider)
                 if (firstModel.isNotBlank()) {
-                    return tryRetryWithModel(sessionId, originalInput, provider, firstModel)
+                    return tryRetryWithModel(sessionId, originalInput, provider, firstModel, imageBase64)
                 }
             }
         }
         return false
     }
-    private suspend fun tryRetryWithModel(sessionId: String, input: String, provider: String, model: String): Boolean {
+    private suspend fun tryRetryWithModel(sessionId: String, input: String, provider: String, model: String, imageBase64: String = ""): Boolean {
         try {
             val prefs = settingsStore.prefsFlow.first()
             val config = getProviderConfig(prefs, provider)
@@ -806,7 +808,7 @@ Kamu adalah asisten AI yang membantu dan ramah."""
                 maxTokens = config.maxTokens,
             )
             val history = chatRepository.getMessagesOnce(sessionId)
-            val (requestUrl, headers, body) = buildRequest(fallbackPrefs, history, input)
+            val (requestUrl, headers, body) = buildRequest(fallbackPrefs, history, input, imageBase64)
             val result = apiClient.execute(url = requestUrl, method = "POST", headersText = headers, body = body)
             if (result.statusCode in 200..299) {
                 val text = extractResponseText(provider, result.responseBody)

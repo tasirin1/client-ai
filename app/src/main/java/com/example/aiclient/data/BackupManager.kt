@@ -83,6 +83,7 @@ class BackupManager(
                     put("content", m.content)
                     put("createdAt", m.createdAt)
                     put("timestamp", m.timestamp)
+                    put("imageBase64", m.imageBase64)
                 })
             }
             put("messages", messagesArr)
@@ -145,6 +146,7 @@ class BackupManager(
                         content = m.optString("content", ""),
                         createdAt = m.optLong("createdAt", 0),
                         timestamp = m.optLong("timestamp", m.optLong("createdAt", 0)),
+                        imageBase64 = m.optString("imageBase64", ""),
                     ))
                 }
             }
