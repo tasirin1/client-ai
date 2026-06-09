@@ -456,7 +456,8 @@ class AppViewModel(
             append("Authorization: Bearer ${prefs.apiKey}")
         }
         val messages = mutableListOf<String>()
-                val timeCtx = getCurrentTimeContext()
+        val now = java.util.Calendar.getInstance()
+        val timeCtx = getCurrentTimeContext(now)
         val sysContent = if (prefs.globalMemory.isNotBlank()) {
             "$timeCtx\n${prefs.globalMemory}"
         } else timeCtx
@@ -471,9 +472,8 @@ class AppViewModel(
             messages.add("""{"role": "${role}", "content": ${msg.content.toJsonString()}}""")
         }
         if (input.isNotBlank()) {
-            val timeCtx = getCurrentTimeContext()
-            val timePrefix = "[Waktu sekarang: " + timeCtx.lines().first() + "]\n\n"
-            val userContent = timePrefix + input
+            val timeStr = getTimeString(now)
+            val userContent = "[Waktu: $timeStr]\n\n$input"
             messages.add("""{"role": "user", "content": ${userContent.toJsonString()}}""")
         }
         val messagesJson = messages.joinToString(",\n")
@@ -493,8 +493,8 @@ class AppViewModel(
         val url = prefs.baseUrl.trimEnd('/') + "/${prefs.model}:generateContent?key=${prefs.apiKey}"
         val headers = "Content-Type: application/json"
         val contents = mutableListOf<String>()
-        // System instruction as top-level field, not in contents
-        // Google uses system_instruction for system prompts
+        val now = java.util.Calendar.getInstance()
+        val timeCtx = getCurrentTimeContext(now)
         // History
         for (msg in history) {
             val role = when (msg.role) {
@@ -507,19 +507,16 @@ class AppViewModel(
         }
         // Current input
         if (input.isNotBlank()) {
-            val timeCtx = getCurrentTimeContext()
-            val timePrefix = "[Waktu sekarang: " + timeCtx.lines().first() + "]\n\n"
-
-            val userContent = timePrefix + input
+            val timeStr = getTimeString(now)
+            val userContent = "[Waktu: $timeStr]\n\n$input"
             contents.add("""{"role": "user", "parts": [{"text": ${userContent.toJsonString()}}]}""")
         }
         val contentsJson = contents.joinToString(",\n")
+        val sysContentG = if (prefs.globalMemory.isNotBlank()) {
+            "$timeCtx\n${prefs.globalMemory}"
+        } else timeCtx
         val body = buildString {
             appendLine("{")
-            val timeCtxG = getCurrentTimeContext()
-            val sysContentG = if (prefs.globalMemory.isNotBlank()) {
-                "$timeCtxG\n${prefs.globalMemory}"
-            } else timeCtxG
             appendLine("  \"system_instruction\": {\"parts\": [{\"text\": ${sysContentG.toJsonString()}}]},")
             appendLine("  \"contents\": [")
             appendLine("    $contentsJson")
@@ -539,6 +536,8 @@ class AppViewModel(
             append("anthropic-version: 2023-06-01")
         }
         val messages = mutableListOf<String>()
+        val now = java.util.Calendar.getInstance()
+        val timeCtx = getCurrentTimeContext(now)
         for (msg in history) {
             val role = when (msg.role) {
                 "request" -> "user"
@@ -549,20 +548,18 @@ class AppViewModel(
             messages.add("""{"role": "${role}", "content": ${msg.content.toJsonString()}}""")
         }
         if (input.isNotBlank()) {
-            val timeCtx = getCurrentTimeContext()
-            val timePrefix = "[Waktu sekarang: " + timeCtx.lines().first() + "]\n\n"
-            val userContent = timePrefix + input
+            val timeStr = getTimeString(now)
+            val userContent = "[Waktu: $timeStr]\n\n$input"
             messages.add("""{"role": "user", "content": ${userContent.toJsonString()}}""")
         }
         val messagesJson = messages.joinToString(",\n")
+        val sysContentA = if (prefs.globalMemory.isNotBlank()) {
+            "$timeCtx\n${prefs.globalMemory}"
+        } else timeCtx
         val body = buildString {
             appendLine("{")
             appendLine("  \"model\": \"${prefs.model}\",")
             appendLine("  \"max_tokens\": ${prefs.maxTokens},")
-            val timeCtxA = getCurrentTimeContext()
-            val sysContentA = if (prefs.globalMemory.isNotBlank()) {
-                "$timeCtxA\n${prefs.globalMemory}"
-            } else timeCtxA
             appendLine("  \"system\": ${sysContentA.toJsonString()},")
             appendLine("  \"messages\": [")
             appendLine("    $messagesJson")
@@ -720,8 +717,7 @@ class AppViewModel(
         val backup = backupManager.deserialize(jsonString) ?: return false
         return backupManager.restore(backup)
     }
-    private fun getCurrentTimeContext(): String {
-        val now = java.util.Calendar.getInstance()
+    private fun getCurrentTimeContext(now: java.util.Calendar = java.util.Calendar.getInstance()): String {
         val days = arrayOf("Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu")
         val months = arrayOf("Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember")
         val dayName = days[now.get(java.util.Calendar.DAY_OF_WEEK) - 1]
@@ -732,8 +728,19 @@ class AppViewModel(
         val minute = now.get(java.util.Calendar.MINUTE)
         val tz = java.text.SimpleDateFormat("z", java.util.Locale.getDefault()).format(now.time)
         return """Hari ini: $dayName, $date $monthName $year. Waktu: $hour:$minute $tz.
-Kamu adalah asisten AI yang membantu dan ramah.
-Kamu bisa memulai obrolan terlebih dahulu untuk menyapa atau menawarkan bantuan jika ada momen yang tepat."""
+Kamu adalah asisten AI yang membantu dan ramah."""
+    }
+    private fun getTimeString(now: java.util.Calendar): String {
+        val hour = now.get(java.util.Calendar.HOUR_OF_DAY)
+        val minute = now.get(java.util.Calendar.MINUTE)
+        val tz = java.text.SimpleDateFormat("z", java.util.Locale.getDefault()).format(now.time)
+        val days = arrayOf("Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu")
+        val months = arrayOf("Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember")
+        val dayName = days[now.get(java.util.Calendar.DAY_OF_WEEK) - 1]
+        val monthName = months[now.get(java.util.Calendar.MONTH)]
+        val date = now.get(java.util.Calendar.DAY_OF_MONTH)
+        val year = now.get(java.util.Calendar.YEAR)
+        return "$dayName, $date $monthName $year $hour:$minute $tz"
     }
     // Fallback providers/models ordered by priority
     private val fallbackChain: List<Pair<String, List<String>>> by lazy {
