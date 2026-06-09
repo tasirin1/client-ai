@@ -30,7 +30,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 enum class ConnectionStatus {
     IDLE, TESTING, CONNECTED, FAILED
 }
@@ -323,7 +322,6 @@ class AppViewModel(
         viewModelScope.launch {
             val session = chatRepository.createSession("Chat Baru")
             updateActiveSession(session.id)
-            sendAutoGreeting(session.id)
         }
     }
     fun deleteSession(sessionId: String) {
@@ -645,7 +643,7 @@ class AppViewModel(
         }
         val prefs = uiState.value.prefs
         val extractedText = extractResponseText(prefs.apiProvider, result.responseBody)
-        val displayText = checkAndProcessSchedule(extractedText, sessionId)
+        val displayText = extractedText
         responseBody.value = displayText
         chatRepository.addMessage(sessionId, "response", displayText)
         val currentSession = chatRepository.getSessionOnce(sessionId)
@@ -734,67 +732,7 @@ class AppViewModel(
         val tz = java.text.SimpleDateFormat("z", java.util.Locale.getDefault()).format(now.time)
         return """Hari ini: $dayName, $date $monthName $year. Waktu: $hour:$minute $tz.
 Kamu adalah asisten AI yang membantu dan ramah.
-Kamu bisa memulai obrolan terlebih dahulu untuk menyapa atau menawarkan bantuan jika ada momen yang tepat.
-FITUR JADWAL (RAHASIA): Jika pengguna minta di-chat di jam tertentu, jawab natural seperti orang biasa. Lalu di AKHIR respon, langsung tulis persis format ini (jangan ada teks lain setelahnya):
-___SCHEDULE___
-hour: 20
-message: Halo! Ada yang bisa dibantu?
-___ENDSCHEDULE___
-Contoh: User bilang "chat jam 8 malam". Kamu jawab "Baik, nanti jam 8 saya chat kamu lagi ya!" Lalu di baris paling akhir, tulis ___SCHEDULE___ hour:20 message:... ___ENDSCHEDULE___"""
-    }
-    // --- Hidden schedule handler ---
-    private fun checkAndProcessSchedule(text: String, sessionId: String): String {
-        val pattern = Regex(
-            "___SCHEDULE___\\s*hour\\s*:\\s*(\\d{1,2})\\s*(?:day\\s*:\\s*(\\d{1,2})\\s*)?message\\s*:\\s*(.+?)___ENDSCHEDULE___",
-            setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
-        )
-        val match = pattern.find(text)
-        if (match != null) {
-            val hour = match.groupValues[1].toIntOrNull()
-            val day = match.groupValues[2].takeIf { it.isNotBlank() }?.toIntOrNull()
-            val message = match.groupValues[3].trim()
-            if (hour != null && hour in 0..23 && message.isNotBlank()) {
-                scheduleMessageAt(hour, day, message, sessionId)
-            }
-            return text.replace(pattern, "").trim()
-        }
-        return text
-    }
-    private fun scheduleMessageAt(hour: Int, day: Int?, message: String, sessionId: String) {
-        viewModelScope.launch {
-            val now = java.util.Calendar.getInstance()
-            val target = java.util.Calendar.getInstance().apply {
-                set(java.util.Calendar.HOUR_OF_DAY, hour)
-                set(java.util.Calendar.MINUTE, 0)
-                set(java.util.Calendar.SECOND, 0)
-                set(java.util.Calendar.MILLISECOND, 0)
-                if (day != null && day in 1..31) {
-                    set(java.util.Calendar.DAY_OF_MONTH, day)
-                }
-                if (before(now)) {
-                    add(java.util.Calendar.DAY_OF_YEAR, 1)
-                }
-            }
-            val delayMs = target.timeInMillis - now.timeInMillis
-            delay(delayMs)
-            val prefs = settingsStore.prefsFlow.first()
-            if (prefs.apiKey.isNotBlank()) {
-                val schedulePrompt = "$message\n\n(Kirim pesan ini sebagai inisiatifmu. Pengguna tidak chat duluan, kamu yang mulai.)"
-                val (requestUrl, headers, body) = buildRequest(prefs, emptyList(), schedulePrompt)
-                runCatching {
-                    apiClient.execute(url = requestUrl, method = "POST", headersText = headers, body = body)
-                }.onSuccess { result ->
-                    if (result.statusCode in 200..299) {
-                        val text = extractResponseText(prefs.apiProvider, result.responseBody)
-                        chatRepository.addMessage(sessionId, "response", text)
-                    }
-                }.onFailure { e ->
-                    chatRepository.addMessage(sessionId, "response", message)
-                }
-            } else {
-                chatRepository.addMessage(sessionId, "response", message)
-            }
-        }
+Kamu bisa memulai obrolan terlebih dahulu untuk menyapa atau menawarkan bantuan jika ada momen yang tepat."""
     }
     // Fallback providers/models ordered by priority
     private val fallbackChain: List<Pair<String, List<String>>> by lazy {
