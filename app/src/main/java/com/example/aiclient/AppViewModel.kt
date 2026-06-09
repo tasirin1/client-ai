@@ -843,7 +843,6 @@ Kamu bisa memulai obrolan terlebih dahulu untuk menyapa atau menawarkan bantuan 
                         chatRepository = container.chatRepository,
                         apiClient = container.apiClient,
                         backupManager = container.backupManager,
-                        codeServer = container.codeServer,
                     ) as T
                 }
             }
