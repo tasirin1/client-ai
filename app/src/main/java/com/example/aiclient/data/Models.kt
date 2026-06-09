@@ -20,6 +20,7 @@ data class AppPrefs(
     val temperature: Float = 0.7f,
     val maxTokens: Int = 4096,
     val providerConfigs: String = "{}",
+    val backupEncryptionKey: String = "",
 )
 
 @Entity(tableName = "sessions")
@@ -273,6 +274,7 @@ data class ProviderConfig(
     val maxTokens: Int = 4096,
     val customModels: List<String> = emptyList(),
     val providerConfigs: String = "{}",
+    val backupEncryptionKey: String = "",
 )
 
 fun applyProviderConfig(prefs: AppPrefs, config: ProviderConfig): AppPrefs {

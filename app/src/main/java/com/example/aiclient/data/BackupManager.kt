@@ -1,5 +1,6 @@
 package com.example.aiclient.data
 
+import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -8,6 +9,12 @@ import java.io.InputStreamReader
 import java.io.OutputStream
 import kotlinx.coroutines.flow.first
 import java.nio.charset.StandardCharsets
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
+import java.security.SecureRandom
 
 data class BackupData(
     val version: Int = 1,
@@ -21,6 +28,52 @@ class BackupManager(
     private val chatRepository: ChatRepository,
     private val settingsStore: SettingsStore,
 ) {
+    companion object {
+        private const val AES_MODE = "AES/GCM/NoPadding"
+        private const val GCM_TAG_LENGTH = 128 // bits
+        private const val GCM_IV_LENGTH = 12   // bytes
+        private const val KEY_ALGORITHM = "AES"
+        private const val KEY_SIZE = 256 // bits
+
+        fun generateKey(): String {
+            val keyGen = KeyGenerator.getInstance(KEY_ALGORITHM)
+            keyGen.init(KEY_SIZE, SecureRandom())
+            val key = keyGen.generateKey()
+            return Base64.encodeToString(key.encoded, Base64.NO_WRAP)
+        }
+
+        private fun loadKey(keyBase64: String): SecretKey {
+            val decoded = Base64.decode(keyBase64, Base64.NO_WRAP)
+            return SecretKeySpec(decoded, KEY_ALGORITHM)
+        }
+
+        fun encrypt(plainText: String, keyBase64: String): String {
+            val key = loadKey(keyBase64)
+            val cipher = Cipher.getInstance(AES_MODE)
+            val iv = ByteArray(GCM_IV_LENGTH)
+            SecureRandom().nextBytes(iv)
+            val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
+            cipher.init(Cipher.ENCRYPT_MODE, key, spec)
+            val cipherText = cipher.doFinal(plainText.toByteArray(StandardCharsets.UTF_8))
+            // Prepend IV to ciphertext
+            val combined = ByteArray(iv.size + cipherText.size)
+            System.arraycopy(iv, 0, combined, 0, iv.size)
+            System.arraycopy(cipherText, 0, combined, iv.size, cipherText.size)
+            return Base64.encodeToString(combined, Base64.NO_WRAP)
+        }
+
+        fun decrypt(encryptedBase64: String, keyBase64: String): String {
+            val key = loadKey(keyBase64)
+            val combined = Base64.decode(encryptedBase64, Base64.NO_WRAP)
+            val cipher = Cipher.getInstance(AES_MODE)
+            val iv = combined.copyOfRange(0, GCM_IV_LENGTH)
+            val cipherText = combined.copyOfRange(GCM_IV_LENGTH, combined.size)
+            val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
+            cipher.init(Cipher.DECRYPT_MODE, key, spec)
+            val plainBytes = cipher.doFinal(cipherText)
+            return String(plainBytes, StandardCharsets.UTF_8)
+        }
+    }
     suspend fun createBackup(): BackupData {
         val prefs = settingsStore.prefsFlow.first()
         val sessions = chatRepository.getAllSessionsOnce()
@@ -169,15 +222,19 @@ class BackupManager(
         } catch (e: Exception) { false }
     }
 
-    suspend fun writeToStream(backup: BackupData, outputStream: OutputStream) {
+    suspend fun writeToStream(backup: BackupData, outputStream: OutputStream, keyBase64: String = "") {
         val json = serialize(backup)
-        outputStream.write(json.toByteArray(StandardCharsets.UTF_8))
+        val data = if (keyBase64.isNotBlank()) encrypt(json, keyBase64) else json
+        outputStream.write(data.toByteArray(StandardCharsets.UTF_8))
         outputStream.flush()
     }
 
-    suspend fun readFromStream(inputStream: InputStream): BackupData? {
+    suspend fun readFromStream(inputStream: InputStream, keyBase64: String = ""): BackupData? {
         val reader = BufferedReader(InputStreamReader(inputStream, StandardCharsets.UTF_8))
         val text = reader.readText()
-        return deserialize(text)
+        val json = if (keyBase64.isNotBlank()) {
+            try { decrypt(text.trim(), keyBase64) } catch (_: Exception) { return null }
+        } else text
+        return deserialize(json)
     }
 }

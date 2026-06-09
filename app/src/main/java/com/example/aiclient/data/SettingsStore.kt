@@ -31,6 +31,7 @@ class SettingsStore(private val context: Context) {
         val temperature = floatPreferencesKey("temperature")
         val maxTokens = intPreferencesKey("max_tokens")
         val providerConfigs = stringPreferencesKey("provider_configs")
+        val backupEncryptionKey = stringPreferencesKey("backup_encryption_key")
     }
 
     val prefsFlow: Flow<AppPrefs> = dataStore.data.map { prefs ->
@@ -55,6 +56,7 @@ class SettingsStore(private val context: Context) {
             prefs[Keys.temperature] = updated.temperature
             prefs[Keys.maxTokens] = updated.maxTokens
             prefs[Keys.providerConfigs] = updated.providerConfigs
+            prefs[Keys.backupEncryptionKey] = updated.backupEncryptionKey
         }
     }
 
@@ -74,6 +76,7 @@ class SettingsStore(private val context: Context) {
             temperature = this[Keys.temperature] ?: AppPrefs().temperature,
             maxTokens = this[Keys.maxTokens] ?: AppPrefs().maxTokens,
             providerConfigs = this[Keys.providerConfigs] ?: AppPrefs().providerConfigs,
+            backupEncryptionKey = this[Keys.backupEncryptionKey] ?: AppPrefs().backupEncryptionKey,
         )
     }
 }
