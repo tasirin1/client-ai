@@ -356,9 +356,10 @@ class AppViewModel(
                     return@launch
                 }
                 val session = ensureCurrentSession(prefs)
-                val history = chatRepository.getMessagesOnce(session.id)
+                // Load messages from ALL sessions for cross-session memory
+                val allHistory = chatRepository.getAllMessagesOnce()
                 val inputForRename = input.take(28).trim()
-                val (requestUrl, headers, body) = buildRequest(prefs, history, input)
+                val (requestUrl, headers, body) = buildRequest(prefs, allHistory, input)
                 if (input.isNotBlank()) {
                     chatRepository.addMessage(session.id, "request", input)
                 }
@@ -410,9 +411,10 @@ class AppViewModel(
                 )
                 // Add the edited message as new request
                 chatRepository.addMessage(sessionId, "request", newContent)
-                // Send request with kept history and new message
+                // Send request with all history + new message
                 errorMessage.value = ""
-                val (requestUrl, headers, body) = buildRequest(prefs, keptMessages, newContent)
+                val allHistory = chatRepository.getAllMessagesOnce()
+                val (requestUrl, headers, body) = buildRequest(prefs, allHistory, newContent)
                 runCatching {
                     apiClient.execute(url = requestUrl, method = "POST", headersText = headers, body = body)
                 }.onSuccess { result ->
@@ -462,7 +464,11 @@ class AppViewModel(
             "$timeCtx\n${prefs.globalMemory}"
         } else timeCtx
         messages.add("""{"role": "system", "content": ${sysContent.toJsonString()}}""")
+        var currentSessionId = ""
         for (msg in history) {
+            if (msg.sessionId != currentSessionId) {
+                currentSessionId = msg.sessionId
+            }
             val role = when (msg.role) {
                 "request" -> "user"
                 "response" -> "assistant"
