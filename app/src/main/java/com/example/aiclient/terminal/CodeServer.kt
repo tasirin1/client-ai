@@ -233,7 +233,7 @@ class CodeServer(private val context: Context, private val port: Int = 8080) {
                 if (idx > 0) sb.append(",")
                 sb.append("\"$k\":")
                 when (v) {
-                    is String -> sb.append("\"${v.replace("\"", "\\\"")}\""")
+                    is String -> sb.append("\"").append(v.replace("\"", "\\\"")).append("\"")
                     is Number -> sb.append(v)
                     is Boolean -> sb.append(v)
                     is List<*> -> sb.append("[" + v.joinToString(",") { item -> "\"$item\"" } + "]")
