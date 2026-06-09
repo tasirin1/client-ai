@@ -374,7 +374,9 @@ class AppViewModel(
                     if (result.statusCode >= 400) {
                         val fbInput = if (input.isNotBlank()) input else imageBase64.take(100)
                         val fallback = tryFallback(session.id, fbInput, result.responseBody, imageBase64)
-                        if (!fallback) handleSuccess(session.id, result, inputForRename)
+                        if (!fallback) {
+                            handleError(session.id, fbInput.ifBlank { body }, Exception("HTTP ${result.statusCode}: ${result.responseBody.take(200)}"))
+                        }
                     } else {
                         handleSuccess(session.id, result, inputForRename)
                     }
@@ -792,39 +794,54 @@ Kamu adalah asisten AI yang membantu dan ramah."""
         val prefs = settingsStore.prefsFlow.first()
         val currentProvider = prefs.apiProvider
         val currentModel = prefs.model
-        // Try the next model in current provider's model list
-        val allModels = getModelsForProvider(currentProvider)
-        if (allModels.isEmpty()) return false
-        val models = allModels
-        val currentModelIndex = models.indexOf(currentModel)
-        if (currentModelIndex >= 0 && currentModelIndex < models.lastIndex) {
-            val nextModel = models[currentModelIndex + 1]
-            // Try next model in same provider
-            return tryRetryWithModel(sessionId, originalInput, currentProvider, nextModel, imageBase64)
+
+        // Kumpulkan semua provider yang punya API key
+        val providersWithKeys = getAllProviderNames().filter { p ->
+            if (p == "Custom") return@filter false
+            getProviderConfig(prefs, p).apiKey.isNotBlank()
         }
-        // Try next provider
-        val chainProviders = fallbackChain.map { it.first }
-        val currentProviderIndex = chainProviders.indexOf(currentProvider)
-        val nextProviderIndex = currentProviderIndex + 1
-        if (nextProviderIndex < fallbackChain.size) {
-            val (nextProvider, nextModels) = fallbackChain[nextProviderIndex]
-            val savedConfig = getProviderConfig(prefs, nextProvider)
-            if (savedConfig.apiKey.isNotBlank() && nextModels.isNotEmpty()) {
-                return tryRetryWithModel(sessionId, originalInput, nextProvider, nextModels[0], imageBase64)
-            }
-        }
-        // Try ALL providers with API keys as last resort
-        for (provider in getAllProviderNames()) {
-            if (provider == "Custom" || provider == currentProvider) continue
+        if (providersWithKeys.isEmpty()) return false
+
+        // Urutkan: provider yang sedang aktif didahulukan
+        val orderedProviders = listOf(currentProvider) + (providersWithKeys - currentProvider)
+
+        // Kumpulkan semua kandidat (provider, model) untuk dicoba
+        data class Candidate(val provider: String, val model: String)
+        val candidates = mutableListOf<Candidate>()
+
+        for (provider in orderedProviders) {
+            val models = getModelsForProvider(provider)
+            if (models.isEmpty()) continue
             val config = getProviderConfig(prefs, provider)
-            if (config.apiKey.isNotBlank()) {
-                val firstModel = getModelsForProvider(provider).firstOrNull() 
-                    ?: getDefaultModel(provider)
-                if (firstModel.isNotBlank()) {
-                    return tryRetryWithModel(sessionId, originalInput, provider, firstModel, imageBase64)
+
+            // Saat ada gambar, prioritaskan vision model
+            if (imageBase64.isNotBlank()) {
+                val visionModel = getVisionModel(provider)
+                if (visionModel != null && models.contains(visionModel)) {
+                    candidates.add(Candidate(provider, visionModel))
+                }
+            }
+
+            // Tambahkan semua model dari provider ini (kecuali yang sudah ditambahkan)
+            for (model in models) {
+                if (!candidates.any { it.provider == provider && it.model == model }) {
+                    candidates.add(Candidate(provider, model))
                 }
             }
         }
+
+        // Mulai dari model setelah currentModel di currentProvider
+        val startIndex = candidates.indexOfFirst { it.provider == currentProvider && it.model == currentModel }
+        val startFrom = if (startIndex >= 0) startIndex + 1 else 0
+
+        // Coba satu per satu
+        for (i in startFrom until candidates.size) {
+            val (provider, model) = candidates[i]
+            if (provider == currentProvider && model == currentModel) continue // skip model yg sama
+            val ok = tryRetryWithModel(sessionId, originalInput, provider, model, imageBase64)
+            if (ok) return true
+        }
+
         return false
     }
     private suspend fun tryRetryWithModel(sessionId: String, input: String, provider: String, model: String, imageBase64: String = ""): Boolean {
