@@ -160,7 +160,6 @@ class MainActivity : ComponentActivity() {
                     onRestore = { restoreLauncher.launch(arrayOf("application/json")) },
                     onAddCustomModel = vm::addCustomModel,
                     onRemoveCustomModel = vm::removeCustomModel,
-                    onToggleServer = vm::toggleServer,
                     connectionStatus = uiState.connectionStatus,
                     connectionError = uiState.connectionError,
 
@@ -199,7 +198,6 @@ private fun MainScreen(
     onRestore: () -> Unit,
     onAddCustomModel: (String) -> Unit = {},
     onRemoveCustomModel: (String) -> Unit = {},
-    onToggleServer: () -> Unit = {},
     connectionStatus: ConnectionStatus,
     connectionError: String,
 ) {
@@ -342,9 +340,6 @@ private fun SessionSidebar(
     onSelectSession: (String) -> Unit,
     onDeleteSession: (String) -> Unit,
     onOpenSettings: () -> Unit,
-    serverRunning: Boolean = false,
-    serverIp: String = "",
-    serverPort: Int = 8080,
 ) {
     Column(
         modifier = Modifier
@@ -446,31 +441,6 @@ private fun SessionSidebar(
             }
         }
 
-        // Code Workspace button
-        if (serverRunning) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                    .background(Color(0xFF1A3A3A), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-            ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(Color(0xFF10A37F), CircleShape)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Server Aktif", color = Color(0xFF10A37F), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("http://$serverIp:$serverPort", color = Color(0xFF888888), fontSize = 10.sp)
-                    Text("http://localhost:$serverPort", color = Color(0xFF666666), fontSize = 10.sp)
-                }
-            }
-        }
         // Settings button at bottom
         Box(
             modifier = Modifier
@@ -488,17 +458,12 @@ private fun SessionSidebar(
                     modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        "Pengaturan",
-                        color = Color(0xFFE0E0E0),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    if (!serverRunning) {
-                        Text("Mulai server untuk coding", color = Color(0xFF555555), fontSize = 10.sp)
-                    }
-                }
+                Text(
+                    "Pengaturan",
+                    color = Color(0xFFE0E0E0),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                )
             }
         }
     }
@@ -880,7 +845,6 @@ private fun SettingsDialog(
     onRestore: () -> Unit,
     onAddCustomModel: (String) -> Unit = {},
     onRemoveCustomModel: (String) -> Unit = {},
-    onToggleServer: () -> Unit = {},
     connectionStatus: ConnectionStatus,
     connectionError: String,
     onDismiss: () -> Unit,

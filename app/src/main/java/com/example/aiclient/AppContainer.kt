@@ -13,5 +13,4 @@ class AppContainer(context: Context) {
     val chatRepository = ChatRepository(database.chatDao())
     val apiClient = GenericApiClient()
     val backupManager = BackupManager(chatRepository, settingsStore)
-    val codeServer = com.example.aiclient.terminal.CodeServer(context)
 }

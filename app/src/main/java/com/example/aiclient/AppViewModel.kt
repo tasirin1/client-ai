@@ -52,9 +52,6 @@ data class UiState(
     val sessionSearchQuery: String = "",
     val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
     val connectionError: String = "",
-    val serverRunning: Boolean = false,
-    val serverIp: String = "",
-    val serverPort: Int = 8080,
 )
 private data class CoreUiState(
     val prefs: AppPrefs,
@@ -63,9 +60,6 @@ private data class CoreUiState(
     val currentSessionId: String,
     val connectionStatus: ConnectionStatus,
     val connectionError: String,
-    val serverRunning: Boolean = false,
-    val serverIp: String = "",
-    val serverPort: Int = 8080,
 )
 private data class NetworkUiState(
     val isLoading: Boolean,
@@ -85,7 +79,6 @@ class AppViewModel(
     private val chatRepository: ChatRepository,
     private val apiClient: GenericApiClient,
     private val backupManager: BackupManager,
-    private val codeServer: com.example.aiclient.terminal.CodeServer? = null,
 ) : ViewModel() {
     private val loading = MutableStateFlow(false)
     private val responseCode = MutableStateFlow<Int?>(null)
@@ -95,12 +88,6 @@ class AppViewModel(
     private val searchQuery = MutableStateFlow("")
     private val connectionStatus = MutableStateFlow(ConnectionStatus.IDLE)
     private val connectionError = MutableStateFlow("")
-    private val _serverRunning = MutableStateFlow(false)
-    val serverRunning: StateFlow<Boolean> = _serverRunning
-    private val _serverPort = MutableStateFlow(8080)
-    val serverPort: StateFlow<Int> = _serverPort
-    private val _serverIp = MutableStateFlow("")
-    val serverIp: StateFlow<String> = _serverIp
     private val prefsFlow = settingsStore.prefsFlow
     private val sessionsFlow = chatRepository.observeSessions()
     private val lastMessagesFlow = chatRepository.observeLastMessagesForAllSessions()
@@ -141,8 +128,6 @@ class AppViewModel(
         combine(connectionStatus, connectionError) { connStatus, connError ->
             connStatus to connError
         },
-        combine(serverRunning, serverIp, serverPort) { run, ip, port ->
-            Triple(run, ip, port)
         }
     ) { session, connPair, server ->
         CoreUiState(
@@ -152,9 +137,6 @@ class AppViewModel(
             currentSessionId = session.id,
             connectionStatus = connPair.first,
             connectionError = connPair.second,
-            serverRunning = server.first,
-            serverIp = server.second,
-            serverPort = server.third,
         )
     }
     private val networkUiStateFlow = combine(
@@ -845,27 +827,6 @@ Kamu bisa memulai obrolan terlebih dahulu untuk menyapa atau menawarkan bantuan 
     }
     // --- Code Server ---
 
-    fun toggleServer() {
-        val server = codeServer ?: return
-        if (_serverRunning.value) {
-            server.stop()
-            _serverRunning.value = false
-        } else {
-            server.start()
-            _serverRunning.value = true
-            _serverPort.value = server.getPort()
-            // Get device IP
-            try {
-                val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
-                while (interfaces.hasMoreElements()) {
-                    val iface = interfaces.nextElement()
-                    if (iface.isLoopback || !iface.isUp) continue
-                    val addrs = iface.inetAddresses
-                    while (addrs.hasMoreElements()) {
-                        val addr = addrs.nextElement()
-                        if (addr is java.net.Inet4Address) {
-                            _serverIp.value = addr.hostAddress ?: ""
-                        }
                     }
                 }
             } catch (_: Exception) {}
