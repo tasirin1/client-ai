@@ -95,6 +95,12 @@ class AppViewModel(
     private val searchQuery = MutableStateFlow("")
     private val connectionStatus = MutableStateFlow(ConnectionStatus.IDLE)
     private val connectionError = MutableStateFlow("")
+    private val _serverRunning = MutableStateFlow(false)
+    val serverRunning: StateFlow<Boolean> = _serverRunning
+    private val _serverPort = MutableStateFlow(8080)
+    val serverPort: StateFlow<Int> = _serverPort
+    private val _serverIp = MutableStateFlow("")
+    val serverIp: StateFlow<String> = _serverIp
     private val prefsFlow = settingsStore.prefsFlow
     private val sessionsFlow = chatRepository.observeSessions()
     private val lastMessagesFlow = chatRepository.observeLastMessagesForAllSessions()
@@ -838,12 +844,6 @@ Kamu bisa memulai obrolan terlebih dahulu untuk menyapa atau menawarkan bantuan 
         }
     }
     // --- Code Server ---
-    private val _serverRunning = MutableStateFlow(false)
-    val serverRunning: StateFlow<Boolean> = _serverRunning
-    private val _serverPort = MutableStateFlow(8080)
-    val serverPort: StateFlow<Int> = _serverPort
-    private val _serverIp = MutableStateFlow("")
-    val serverIp: StateFlow<String> = _serverIp
 
     fun toggleServer() {
         val server = codeServer ?: return
