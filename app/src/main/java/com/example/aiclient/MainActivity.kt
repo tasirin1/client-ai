@@ -205,7 +205,6 @@ private fun MainScreen(
     val scope = rememberCoroutineScope()
     val showSettings = rememberSaveable { mutableStateOf(false) }
     val chatListState = rememberLazyListState()
-    var inputText by remember { mutableStateOf("") }
     val keyboardController = LocalSoftwareKeyboardController.current
     // Auto-scroll when new messages arrive
     LaunchedEffect(uiState.messages.size) {
@@ -296,11 +295,8 @@ private fun MainScreen(
                 )
 
                 ComposerBar(
-                    quickInput = inputText,
-                    onQuickInputChange = { inputText = it },
                     onSend = { text ->
                         onSend(text)
-                        inputText = ""
                     },
                     isLoading = uiState.isLoading,
                 )
@@ -754,12 +750,11 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
 
 @Composable
 private fun ComposerBar(
-    quickInput: String,
-    onQuickInputChange: (String) -> Unit,
     onSend: (String) -> Unit,
     isLoading: Boolean,
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
+    var inputText by remember { mutableStateOf("") }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
@@ -771,11 +766,9 @@ private fun ComposerBar(
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
-
-
             OutlinedTextField(
-                value = quickInput,
-                onValueChange = onQuickInputChange,
+                value = inputText,
+                onValueChange = { inputText = it },
                 placeholder = {
                     Text(
 "Ketik pesan...",
@@ -797,9 +790,11 @@ private fun ComposerBar(
                 ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = {
-                    if (!isLoading && quickInput.isNotBlank()) {
+                    if (!isLoading && inputText.isNotBlank()) {
                         keyboardController?.hide()
-                        onSend(quickInput)
+                        val text = inputText
+                        inputText = ""
+                        onSend(text)
                     }
                 }),
                 shape = RoundedCornerShape(12.dp),
@@ -808,9 +803,11 @@ private fun ComposerBar(
             Button(
                 onClick = {
                     keyboardController?.hide()
-                    onSend(quickInput)
+                    val text = inputText
+                    inputText = ""
+                    onSend(text)
                 },
-                enabled = !isLoading && quickInput.isNotBlank(),
+                enabled = !isLoading && inputText.isNotBlank(),
                 shape = CircleShape,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF10A37F),

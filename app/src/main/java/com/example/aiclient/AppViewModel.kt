@@ -74,6 +74,7 @@ private data class SessionState(
     val messages: List<MessageEntity>,
     val id: String,
 )
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class AppViewModel(
     private val settingsStore: SettingsStore,
     private val chatRepository: ChatRepository,
@@ -128,8 +129,7 @@ class AppViewModel(
         combine(connectionStatus, connectionError) { connStatus, connError ->
             connStatus to connError
         },
-        }
-    ) { session, connPair, server ->
+    ) { session, connPair ->
         CoreUiState(
             prefs = session.prefs,
             sessions = session.sessions,
@@ -823,13 +823,6 @@ Kamu bisa memulai obrolan terlebih dahulu untuk menyapa atau menawarkan bantuan 
             val provider = prefs.apiProvider
             val newConfigs = com.example.aiclient.data.removeCustomModel(prefs, provider, model)
             settingsStore.update { it.copy(providerConfigs = newConfigs) }
-        }
-    }
-    // --- Code Server ---
-
-                    }
-                }
-            } catch (_: Exception) {}
         }
     }
 
