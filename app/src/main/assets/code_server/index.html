@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Code Workspace</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,sans-serif}
+body{background:#0d0d0d;color:#e0e0e0;min-height:100vh}
+header{background:#1a1a1a;padding:16px 24px;border-bottom:1px solid #333}
+h1{font-size:18px;color:#10A37F}
+h1 span{color:#666;font-size:12px;margin-left:8px}
+nav{display:flex;gap:12px;padding:12px 24px;background:#111;border-bottom:1px solid #222}
+nav a{color:#888;text-decoration:none;font-size:13px;padding:6px 14px;border-radius:6px;transition:all .2s}
+nav a:hover,nav a.active{color:#10A37F;background:#1a3a3a}
+main{padding:24px;max-width:1200px;margin:0 auto}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.card{background:#1a1a1a;border-radius:12px;padding:20px;border:1px solid #222}
+.card h3{font-size:14px;color:#10A37F;margin-bottom:8px}
+.card p{font-size:12px;color:#888;line-height:1.5}
+.info{background:#1a1a1a;border-radius:12px;padding:20px;border:1px solid #222;margin-top:20px}
+.info h3{font-size:13px;color:#888;margin-bottom:8px}
+.info code{display:block;background:#000;padding:12px;border-radius:8px;font-size:13px;color:#10A37F;margin:4px 0;font-family:monospace}
+</style>
+</head>
+<body>
+<header><h1>&#x1F916; AI Workspace <span>Code Sandbox</span></h1></header>
+<nav>
+<a href="/" class="active">Dashboard</a>
+<a href="/terminal">Terminal</a>
+</nav>
+<main>
+<div class="cards">
+<div class="card">
+<h3>&#x1F4BB; Terminal</h3>
+<p>Jalankan perintah Linux, script Python, bash, dan lainnya</p>
+<br><a href="/terminal" style="color:#10A37F;font-size:13px">Buka Terminal &rarr;</a>
+</div>
+<div class="card">
+<h3>&#x1F4C2; File System</h3>
+<p>Tulis dan baca file langsung dari AI atau manual</p>
+</div>
+<div class="card">
+<h3>&#x2699; Code Execution</h3>
+<p>Eksekusi kode Python, Node.js, shell script</p>
+</div>
+</div>
+<div class="info">
+<h3>&#x2139; Workspace Info</h3>
+<code id="status">Loading...</code>
+</div>
+</main>
+<script>
+fetch('/api/status').then(r=>r.json()).then(d=>{
+    document.getElementById('status').innerHTML =
+        'Workspace: ' + d.workspace + '<br>' +
+        '&#x1F310; http://localhost:' + d.port +
+        ' | OS: ' + d.os + ' | Arch: ' + d.arch;
+});
+</script>
+</body>
+</html>

@@ -52,6 +52,9 @@ data class UiState(
     val sessionSearchQuery: String = "",
     val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
     val connectionError: String = "",
+    val serverRunning: Boolean = false,
+    val serverIp: String = "",
+    val serverPort: Int = 8080,
 )
 private data class CoreUiState(
     val prefs: AppPrefs,
@@ -60,6 +63,9 @@ private data class CoreUiState(
     val currentSessionId: String,
     val connectionStatus: ConnectionStatus,
     val connectionError: String,
+    val serverRunning: Boolean = false,
+    val serverIp: String = "",
+    val serverPort: Int = 8080,
 )
 private data class NetworkUiState(
     val isLoading: Boolean,
@@ -75,6 +81,12 @@ private data class SessionState(
     val id: String,
 )
 class AppViewModel(
+    private val settingsStore: SettingsStore,
+    private val chatRepository: ChatRepository,
+    private val apiClient: GenericApiClient,
+    private val backupManager: BackupManager,
+    private val codeServer: com.example.aiclient.terminal.CodeServer? = null,
+) : ViewModel() {
     private val settingsStore: SettingsStore,
     private val chatRepository: ChatRepository,
     private val apiClient: GenericApiClient,
@@ -127,8 +139,11 @@ class AppViewModel(
         },
         combine(connectionStatus, connectionError) { connStatus, connError ->
             connStatus to connError
+        },
+        combine(serverRunning, serverIp, serverPort) { run, ip, port ->
+            Triple(run, ip, port)
         }
-    ) { session, connPair ->
+    ) { session, connPair, server ->
         CoreUiState(
             prefs = session.prefs,
             sessions = session.sessions,
@@ -136,6 +151,9 @@ class AppViewModel(
             currentSessionId = session.id,
             connectionStatus = connPair.first,
             connectionError = connPair.second,
+            serverRunning = server.first,
+            serverIp = server.second,
+            serverPort = server.third,
         )
     }
     private val networkUiStateFlow = combine(
@@ -824,6 +842,41 @@ Kamu bisa memulai obrolan terlebih dahulu untuk menyapa atau menawarkan bantuan 
             settingsStore.update { it.copy(providerConfigs = newConfigs) }
         }
     }
+    // --- Code Server ---
+    private val _serverRunning = MutableStateFlow(false)
+    val serverRunning: StateFlow<Boolean> = _serverRunning
+    private val _serverPort = MutableStateFlow(8080)
+    val serverPort: StateFlow<Int> = _serverPort
+    private val _serverIp = MutableStateFlow("")
+    val serverIp: StateFlow<String> = _serverIp
+
+    fun toggleServer() {
+        val server = codeServer ?: return
+        if (_serverRunning.value) {
+            server.stop()
+            _serverRunning.value = false
+        } else {
+            server.start()
+            _serverRunning.value = true
+            _serverPort.value = server.getPort()
+            // Get device IP
+            try {
+                val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+                while (interfaces.hasMoreElements()) {
+                    val iface = interfaces.nextElement()
+                    if (iface.isLoopback || !iface.isUp) continue
+                    val addrs = iface.inetAddresses
+                    while (addrs.hasMoreElements()) {
+                        val addr = addrs.nextElement()
+                        if (addr is java.net.Inet4Address) {
+                            _serverIp.value = addr.hostAddress ?: ""
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory {
             return object : ViewModelProvider.Factory {
@@ -834,6 +887,7 @@ Kamu bisa memulai obrolan terlebih dahulu untuk menyapa atau menawarkan bantuan 
                         chatRepository = container.chatRepository,
                         apiClient = container.apiClient,
                         backupManager = container.backupManager,
+                        codeServer = container.codeServer,
                     ) as T
                 }
             }
