@@ -52,6 +52,7 @@ data class UiState(
     val sessionSearchQuery: String = "",
     val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
     val connectionError: String = "",
+    val errorLog: String = "",
 )
 private data class CoreUiState(
     val prefs: AppPrefs,
@@ -60,6 +61,7 @@ private data class CoreUiState(
     val currentSessionId: String,
     val connectionStatus: ConnectionStatus,
     val connectionError: String,
+    val errorLog: String,
 )
 private data class NetworkUiState(
     val isLoading: Boolean,
@@ -89,6 +91,7 @@ class AppViewModel(
     private val searchQuery = MutableStateFlow("")
     private val connectionStatus = MutableStateFlow(ConnectionStatus.IDLE)
     private val connectionError = MutableStateFlow("")
+    private val errorLog = MutableStateFlow("")
     private val prefsFlow = settingsStore.prefsFlow
     private val sessionsFlow = chatRepository.observeSessions()
     private val lastMessagesFlow = chatRepository.observeLastMessagesForAllSessions()
@@ -129,7 +132,8 @@ class AppViewModel(
         combine(connectionStatus, connectionError) { connStatus, connError ->
             connStatus to connError
         },
-    ) { session, connPair ->
+        errorLog,
+    ) { session, connPair, el ->
         CoreUiState(
             prefs = session.prefs,
             sessions = session.sessions,
@@ -137,6 +141,7 @@ class AppViewModel(
             currentSessionId = session.id,
             connectionStatus = connPair.first,
             connectionError = connPair.second,
+            errorLog = el,
         )
     }
     private val networkUiStateFlow = combine(
@@ -172,6 +177,7 @@ class AppViewModel(
             sessionSearchQuery = searchQuery.value,
             connectionStatus = core.connectionStatus,
             connectionError = core.connectionError,
+            errorLog = core.errorLog,
         )
     }.stateIn(
         viewModelScope,
@@ -238,18 +244,25 @@ class AppViewModel(
     fun updateActiveSession(sessionId: String) = persistPrefs { it.copy(activeSessionId = sessionId) }
     fun updateSessionSearch(value: String) { searchQuery.value = value }
     // --- Test Connection ---
+    fun clearErrorLog() {
+        errorLog.value = ""
+        appendErrorLog("Log dibersihkan")
+    }
     fun testConnection() {
         viewModelScope.launch {
             connectionStatus.value = ConnectionStatus.TESTING
             connectionError.value = ""
+            appendErrorLog("Test koneksi dimulai...")
             val prefs = uiState.value.prefs
             if (prefs.apiKey.isBlank()) {
                 connectionStatus.value = ConnectionStatus.FAILED
+                appendErrorLog("Test koneksi gagal: API Key belum diisi")
                 connectionError.value = "API Key belum diisi"
                 return@launch
             }
             if (prefs.baseUrl.isBlank()) {
                 connectionStatus.value = ConnectionStatus.FAILED
+                appendErrorLog("Test koneksi gagal: Base URL belum diisi")
                 connectionError.value = "Base URL belum diisi"
                 return@launch
             }
@@ -306,15 +319,18 @@ class AppViewModel(
             }.onSuccess { result ->
                 if (result.statusCode in 200..299) {
                     connectionStatus.value = ConnectionStatus.CONNECTED
+                    appendErrorLog("Test koneksi berhasil ke ${prefs.apiProvider}")
                     connectionError.value = ""
                 } else {
                     val preview = result.responseBody.take(200).replace("\n", " ").trim()
                     connectionStatus.value = ConnectionStatus.FAILED
+                    appendErrorLog("Test koneksi gagal: HTTP ${result.statusCode}")
                     connectionError.value = "HTTP ${result.statusCode} ${result.statusMessage}\n$preview"
                 }
             }.onFailure { throwable ->
                 val msg = throwable.message ?: throwable::class.java.simpleName
                 connectionStatus.value = ConnectionStatus.FAILED
+                appendErrorLog("Test koneksi gagal: $msg")
                 connectionError.value = msg
             }
         }
@@ -684,9 +700,21 @@ class AppViewModel(
             chatRepository.renameSession(sessionId, newTitle)
         }
     }
+    private fun appendErrorLog(message: String) {
+        val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+        val entry = "[$timestamp] $message"
+        val current = errorLog.value
+        val updated = if (current.length > 10000) {
+            current.takeLast(9000) + "\n...\n" + entry
+        } else {
+            current + "\n" + entry
+        }
+        errorLog.value = updated
+    }
     private suspend fun handleError(sessionId: String, renderedBody: String, throwable: Throwable) {
         val message = throwable.message ?: throwable::class.java.simpleName
         val cleanMsg = message.take(300).replace("\n", " ")
+        appendErrorLog("Error: $cleanMsg")
         errorMessage.value = cleanMsg
         responseBody.value = renderedBody
         chatRepository.addMessage(sessionId, "error", cleanMsg)
@@ -873,6 +901,7 @@ Kamu adalah asisten AI yang membantu dan ramah."""
             val (requestUrl, headers, body) = buildRequest(fallbackPrefs, history, input, imageBase64)
             val result = apiClient.execute(url = requestUrl, method = "POST", headersText = headers, body = body)
             if (result.statusCode in 200..299) {
+                appendErrorLog("Fallback berhasil: $provider / $model")
                 val text = extractResponseText(provider, result.responseBody)
                 responseBody.value = text
                 chatRepository.addMessage(sessionId, "response", text)

@@ -171,7 +171,8 @@ class MainActivity : ComponentActivity() {
                     onRemoveCustomModel = vm::removeCustomModel,
                     connectionStatus = uiState.connectionStatus,
                     connectionError = uiState.connectionError,
-
+                    errorLog = uiState.errorLog,
+                    onClearErrorLog = vm::clearErrorLog,
                 )
             }
         }
@@ -209,6 +210,8 @@ private fun MainScreen(
     onRemoveCustomModel: (String) -> Unit = {},
     connectionStatus: ConnectionStatus,
     connectionError: String,
+    errorLog: String,
+    onClearErrorLog: () -> Unit,
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -330,6 +333,8 @@ private fun MainScreen(
             onRemoveCustomModel = onRemoveCustomModel,
             connectionStatus = connectionStatus,
             connectionError = connectionError,
+            errorLog = errorLog,
+            onClearErrorLog = onClearErrorLog,
             onDismiss = { showSettings.value = false },
         )
     }
@@ -920,6 +925,8 @@ private fun SettingsDialog(
     onRemoveCustomModel: (String) -> Unit = {},
     connectionStatus: ConnectionStatus,
     connectionError: String,
+    errorLog: String = "",
+    onClearErrorLog: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     val providers = getAllProviderNames()
@@ -1308,6 +1315,55 @@ private fun SettingsDialog(
                     ),
                     shape = RoundedCornerShape(8.dp),
                 )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Error Log section
+                Text("Error Log", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                if (errorLog.isNotBlank()) {
+                    val clipboard = LocalClipboardManager.current
+                    OutlinedTextField(
+                        value = errorLog,
+                        onValueChange = {},
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp),
+                        readOnly = true,
+                        minLines = 3,
+                        maxLines = 8,
+                        textStyle = MaterialTheme.typography.bodySmall.copy(
+                            color = Color(0xFFCC6666),
+                            fontSize = 11.sp,
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF555555),
+                            unfocusedBorderColor = Color(0xFF333333),
+                            focusedContainerColor = Color(0xFF121212),
+                            unfocusedContainerColor = Color(0xFF121212),
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                clipboard.setText(androidx.compose.ui.text.AnnotatedString(errorLog))
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF10A37F)),
+                        ) {
+                            Text("Salin Log", fontSize = 12.sp)
+                        }
+                        OutlinedButton(
+                            onClick = onClearErrorLog,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF6B6B)),
+                        ) {
+                            Text("Bersihkan", fontSize = 12.sp)
+                        }
+                    }
+                } else {
+                    Text(
+                        "Belum ada error",
+                        color = Color(0xFF555555),
+                        fontSize = 12.sp,
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(4.dp))
 
