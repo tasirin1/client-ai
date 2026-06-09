@@ -783,7 +783,7 @@ Kamu adalah asisten AI yang membantu dan ramah."""
         "Anthropic" to "claude-3-5-sonnet-20241022",
         "Google" to "gemini-2.5-flash",
         "Deepseek" to "deepseek-chat",
-        "Groq" to "llama-3.2-90b-vision-preview",
+        "Groq" to "llama-3.2-11b-vision-preview",
         "OpenRouter" to "openai/gpt-4o",
     )
     private fun getVisionModel(provider: String): String? = visionModels[provider]
