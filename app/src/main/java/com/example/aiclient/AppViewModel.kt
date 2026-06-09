@@ -448,10 +448,17 @@ class AppViewModel(
             val (h, b) = buildCustomRequest(prefs, history, input)
             return Triple(prefs.baseUrl.ifBlank { prefs.endpointUrl }, h, b)
         }
-        return when (prefs.apiProvider) {
-            "Google" -> buildGoogleRequest(prefs, history, input, imageBase64)
-            "Anthropic" -> buildAnthropicRequest(prefs, history, input, imageBase64)
-            else -> buildOpenAiRequest(prefs, history, input, imageBase64)
+        // Auto-switch ke vision model jika ada gambar
+        val effectivePrefs = if (imageBase64.isNotBlank()) {
+            val visionModel = getVisionModel(prefs.apiProvider)
+            if (visionModel != null && prefs.model != visionModel) {
+                prefs.copy(model = visionModel)
+            } else prefs
+        } else prefs
+        return when (effectivePrefs.apiProvider) {
+            "Google" -> buildGoogleRequest(effectivePrefs, history, input, imageBase64)
+            "Anthropic" -> buildAnthropicRequest(effectivePrefs, history, input, imageBase64)
+            else -> buildOpenAiRequest(effectivePrefs, history, input, imageBase64)
         }
     }
     private fun buildOpenAiRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String, imageBase64: String = ""): Triple<String, String, String> {
@@ -754,6 +761,17 @@ Kamu adalah asisten AI yang membantu dan ramah."""
     private val fallbackChain: List<Pair<String, List<String>>> by lazy {
         getFallbackChain()
     }
+    // Vision-capable models per provider (auto-switch saat kirim gambar)
+    private val visionModels: Map<String, String> = mapOf(
+        "OpenAI" to "gpt-4o",
+        "Anthropic" to "claude-3-5-sonnet-20241022",
+        "Google" to "gemini-1.5-flash",
+        "Deepseek" to "deepseek-chat",
+        "Groq" to "llama-3.2-90b-vision-preview",
+        "OpenRouter" to "openai/gpt-4o",
+    )
+    private fun getVisionModel(provider: String): String? = visionModels[provider]
+
     private suspend fun tryFallback(sessionId: String, originalInput: String, errorHint: String, imageBase64: String = ""): Boolean {
         val prefs = settingsStore.prefsFlow.first()
         val currentProvider = prefs.apiProvider

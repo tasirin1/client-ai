@@ -98,6 +98,7 @@ val ALL_PROVIDERS: List<ProviderInfo> = listOf(
             "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama-guard-3-8b",
             "llama3-70b-8192", "llama3-8b-8192", "mixtral-8x7b-32768",
             "gemma2-9b-it", "deepseek-r1-distill-llama-70b",
+            "llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview",
         ),
     ),
     ProviderInfo(
@@ -109,6 +110,7 @@ val ALL_PROVIDERS: List<ProviderInfo> = listOf(
             "anthropic/claude-3.5-sonnet", "anthropic/claude-3-haiku",
             "google/gemini-2.5-flash", "google/gemini-2.0-flash", "google/gemini-1.5-flash",
             "meta-llama/llama-3.3-70b-instruct", "meta-llama/llama-3.1-8b-instruct",
+            "meta-llama/llama-3.2-90b-vision-instruct", "meta-llama/llama-3.2-11b-vision-instruct",
             "deepseek/deepseek-r1", "deepseek/deepseek-chat",
             "mistralai/mistral-small-24b-instruct", "mistralai/mistral-large",
             "cohere/command-r-plus", "cohere/command-r",
