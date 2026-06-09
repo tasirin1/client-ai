@@ -13,6 +13,7 @@ Android client AI dengan antarmuka seperti ChatGPT. Mendukung **14 provider AI**
 - **Keyboard otomatis turun** saat AI merespon
 - **Animasi typing** ala ChatGPT (3 titik + "AI mengetik...")
 - **Date separator** antar hari
+- **Image recognition** — kirim gambar, AI otomatis pakai model vision
 
 ### 🔧 14 Provider AI
 Setiap provider punya konfigurasi sendiri (API key, model, base URL, temperature, max tokens):
@@ -21,7 +22,7 @@ Setiap provider punya konfigurasi sendiri (API key, model, base URL, temperature
 |----------|--------------|------------|
 | **OpenAI** | gpt-4o | gpt-4o-mini, gpt-4-turbo, gpt-4, gpt-3.5-turbo, o1, o1-mini, o3-mini |
 | **Anthropic** | claude-3-5-sonnet | claude-3-opus, claude-3-sonnet, claude-3-haiku, claude-3-5-haiku |
-| **Google Gemini** | gemini-1.5-flash | gemini-2.5-flash, gemini-2.5-pro, gemini-2.0-flash, gemini-2.0-flash-lite, gemini-1.5-pro, gemini-1.0-pro |
+| **Google Gemini** | gemini-2.5-flash | gemini-2.5-flash, gemini-2.5-pro, gemini-2.0-flash, gemini-2.0-flash-lite, gemini-1.5-pro, gemini-1.0-pro |
 | **Deepseek** | deepseek-chat | deepseek-reasoner, deepseek-coder |
 | **Groq** | llama-3.3-70b | llama-3.1-8b, llama-guard-3, llama3-70b, llama3-8b, mixtral-8x7b, gemma2-9b, deepseek-r1-distill |
 | **OpenRouter** | openai/gpt-4o | 18+ model dari berbagai provider |
@@ -45,9 +46,6 @@ Gagal karena token habis / rate limit / error? AI otomatis pindah:
 ### 🧠 Memory & Konteks
 - **System prompt** kustom — atur kepribadian AI
 - **AI tau waktu** — inject info waktu nyata ke system prompt
-- **Auto-greeting** — AI sapa duluan di sesi baru
-- **AI Chat Duluan** — AI bisa memulai obrolan tanpa kamu chat duluan
-- **Jadwal Chat Natural** — Bilang "chat jam 8 malam", AI jawab natural, otomatis chat kamu nanti
 - **Backup & Restore** — simpan/muat data percakapan ke file JSON
 
 ### 📡 Test Koneksi
