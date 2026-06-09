@@ -7,8 +7,8 @@ Android client AI dengan antarmuka seperti ChatGPT. Mendukung **14 provider AI**
 ### 💬 Chat seperti ChatGPT
 - **Sidebar sesi** — grup tanggal (Hari Ini / Kemarin / 7 Hari / Bulan Ini), preview pesan terakhir
 - **Cari sesi** berdasarkan judul
-- **Edit & Regenerate** — tap ikon edit pada pesanmu, AI generate ulang respons
-- **Copy respons AI** — tap ikon copy, animasi check
+- **Edit & Regenerate** — tap ikon edit pada pesanmu, AI regenerate respons
+- **Copy respons AI** — tap ikon copy
 - **Auto-scroll** ke pesan terbaru
 - **Keyboard otomatis turun** saat AI merespon
 - **Animasi typing** ala ChatGPT (3 titik + "AI mengetik...")
@@ -38,14 +38,15 @@ Setiap provider punya konfigurasi sendiri (API key, model, base URL, temperature
 
 ### 🔄 Auto-Fallback
 Gagal karena token habis / rate limit / error? AI otomatis pindah:
-1. Model berikutnya di provider yang sama
-2. Provider berikutnya di daftar
-3. **Semua provider lain yang API key-nya terisi**
+1. Coba **semua model** di provider aktif (termasuk vision model jika ada gambar)
+2. Coba **semua provider lain** yang API key-nya terisi
+3. Prioritaskan **vision model** jika ada gambar
 4. Fallback berjalan di latar belakang, transparan
 
 ### 🧠 Memory & Konteks
 - **System prompt** kustom — atur kepribadian AI
 - **AI tau waktu** — inject info waktu nyata ke system prompt
+- **Cross-session memory** — AI ingat semua percakapan dari semua sesi
 - **Backup & Restore** — simpan/muat data percakapan ke file JSON
 
 ### 📡 Test Koneksi
@@ -53,12 +54,18 @@ Tombol **Uji Koneksi** di pengaturan:
 - ✅ Terhubung — status 2xx
 - ❌ Gagal — tampilkan HTTP code + pesan error
 
+### 📋 Error Log
+- Semua error, fallback, dan hasil test tercatat otomatis
+- Lihat dan **Salin Log** di menu Pengaturan → Error Log
+- Berguna untuk debugging dan melaporkan bug
+
 ### 🎨 Tampilan
 - Dark mode netral (#121212 + aksen hijau #10A37F)
+- Icon aplikasi adaptive icon (chat bubble + AI dots)
 - Chat bubble (Kamu / Asisten)
 - Timestamp setiap pesan
 - Loading & typing indicator
-- Animasi fade-in
+- Animasi typing ala ChatGPT
 
 ## Persyaratan
 
@@ -68,11 +75,12 @@ Tombol **Uji Koneksi** di pengaturan:
 
 ## Cara Pakai
 
-1. Download APK dari **Actions** → artifact `ai-client-debug-apk`
+1. Download APK dari **Actions** → artifact `ai-client-apk`
 2. Buka **Pengaturan** (ikon ⚙️ di sidebar)
 3. Pilih **Provider**, isi **API Key**, pilih **Model**
 4. Klik **Test** untuk verifikasi koneksi
 5. Tutup pengaturan, ketik pesan, kirim
+6. Jika error, buka Pengaturan → Error Log → Salin dan laporkan
 
 ## Build
 
@@ -99,9 +107,13 @@ app/src/main/java/com/example/aiclient/
 │   ├── SettingsStore.kt     # DataStore preferences
 │   └── BackupManager.kt     # Backup/restore JSON
 ├── network/
-│   ├── GenericApiClient.kt  # OkHttp client + template engine
-└── ui/
-    └── Theme.kt             # Dark theme color scheme
+│   └── GenericApiClient.kt  # OkHttp client + template engine
+├── ui/
+│   └── Theme.kt             # Dark theme color scheme
+└── res/
+    ├── drawable/            # Vector icons
+    ├── mipmap-anydpi-v26/   # Adaptive icon
+    └── mipmap-*/            # PNG icons semua density
 ```
 
 ## Lisensi
