@@ -772,22 +772,11 @@ class AppViewModel(
     }
     suspend fun createBackupJson(): String {
         val backup = backupManager.createBackup()
-        val json = backupManager.serialize(backup)
-        val key = getOrCreateEncryptionKey()
-        return BackupManager.encrypt(json, key)
+        return backupManager.serialize(backup)
     }
     suspend fun restoreFromJson(jsonString: String): Boolean {
-        val key = getOrCreateEncryptionKey()
-        val json = try { BackupManager.decrypt(jsonString.trim(), key) } catch (_: Exception) { jsonString }
-        val backup = backupManager.deserialize(json) ?: return false
+        val backup = backupManager.deserialize(jsonString) ?: return false
         return backupManager.restore(backup)
-    }
-    private suspend fun getOrCreateEncryptionKey(): String {
-        val prefs = settingsStore.prefsFlow.first()
-        if (prefs.backupEncryptionKey.isNotBlank()) return prefs.backupEncryptionKey
-        val newKey = BackupManager.generateKey()
-        settingsStore.update { it.copy(backupEncryptionKey = newKey) }
-        return newKey
     }
     private fun getCurrentTimeContext(now: java.util.Calendar = java.util.Calendar.getInstance()): String {
         val days = arrayOf("Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu")

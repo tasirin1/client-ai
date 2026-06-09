@@ -224,17 +224,13 @@ class BackupManager(
 
     suspend fun writeToStream(backup: BackupData, outputStream: OutputStream, keyBase64: String = "") {
         val json = serialize(backup)
-        val data = if (keyBase64.isNotBlank()) encrypt(json, keyBase64) else json
-        outputStream.write(data.toByteArray(StandardCharsets.UTF_8))
+        outputStream.write(json.toByteArray(StandardCharsets.UTF_8))
         outputStream.flush()
     }
 
-    suspend fun readFromStream(inputStream: InputStream, keyBase64: String = ""): BackupData? {
+    suspend fun readFromStream(inputStream: InputStream): BackupData? {
         val reader = BufferedReader(InputStreamReader(inputStream, StandardCharsets.UTF_8))
         val text = reader.readText()
-        val json = if (keyBase64.isNotBlank()) {
-            try { decrypt(text.trim(), keyBase64) } catch (_: Exception) { return null }
-        } else text
-        return deserialize(json)
+        return deserialize(text)
     }
 }
