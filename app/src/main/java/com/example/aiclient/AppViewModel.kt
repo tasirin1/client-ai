@@ -85,6 +85,7 @@ class AppViewModel(
     private val chatRepository: ChatRepository,
     private val apiClient: GenericApiClient,
     private val backupManager: BackupManager,
+    private val codeServer: com.example.aiclient.terminal.CodeServer? = null,
 ) : ViewModel() {
     private val loading = MutableStateFlow(false)
     private val responseCode = MutableStateFlow<Int?>(null)
