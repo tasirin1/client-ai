@@ -9,6 +9,15 @@ android {
     namespace = "com.example.aiclient"
     compileSdk = 34
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.example.aiclient"
         minSdk = 26
@@ -22,7 +31,7 @@ android {
 
     buildTypes {
         release {
-             signingConfig = signingConfigs.debug
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
