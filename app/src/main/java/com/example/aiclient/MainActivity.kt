@@ -222,9 +222,9 @@ private fun MainScreen(
             chatListState.animateScrollToItem(uiState.messages.lastIndex, scrollOffset = -20)
         }
     }
-    // Auto-hide keyboard when AI starts responding
-    LaunchedEffect(uiState.isLoading) {
-        if (uiState.isLoading) {
+    // Auto-hide keyboard when AI starts responding or when response arrives
+    LaunchedEffect(uiState.isLoading, uiState.messages.size) {
+        if (uiState.isLoading || uiState.messages.isNotEmpty()) {
             keyboardController?.hide()
         }
     }
@@ -784,8 +784,8 @@ private fun ComposerBar(
     isLoading: Boolean,
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
-    var inputText by remember { mutableStateOf("") }
-    var imageBase64 by remember { mutableStateOf("") }
+    var inputText by rememberSaveable { mutableStateOf("") }
+    var imageBase64 by rememberSaveable { mutableStateOf("") }
     val context = LocalContext.current
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
@@ -814,10 +814,11 @@ private fun ComposerBar(
                 onValueChange = { inputText = it },
                 placeholder = {
                     Text(
-"Ketik pesan...",
+                        "Ketik pesan...",
                         color = Color(0xFF666666),
                     )
                 },
+                singleLine = false,
                 modifier = Modifier.weight(1f),
                 minLines = 1,
                 maxLines = 6,

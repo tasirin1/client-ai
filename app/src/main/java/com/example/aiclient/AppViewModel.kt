@@ -484,12 +484,20 @@ class AppViewModel(
                 "error" -> "assistant"
                 else -> msg.role
             }
-            messages.add("""{"role": "${role}", "content": ${msg.content.toJsonString()}}""")
+            if (msg.imageBase64.isNotBlank()) {
+                messages.add("""{"role": "${role}", "content": [{"type": "text", "text": ${msg.content.toJsonString()}}, {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,${msg.imageBase64}"}}]}""")
+            } else {
+                messages.add("""{"role": "${role}", "content": ${msg.content.toJsonString()}}""")
+            }
         }
         if (input.isNotBlank()) {
             val timeStr = getTimeString(now)
             val userContent = "[Waktu: $timeStr]\n\n$input"
-            messages.add("""{"role": "user", "content": ${userContent.toJsonString()}}""")
+            if (imageBase64.isNotBlank()) {
+                messages.add("""{"role": "user", "content": [{"type": "text", "text": ${userContent.toJsonString()}}, {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,${imageBase64}"}}]}""")
+            } else {
+                messages.add("""{"role": "user", "content": ${userContent.toJsonString()}}""")
+            }
         }
         val messagesJson = messages.joinToString(",\n")
         val body = buildString {
@@ -518,13 +526,21 @@ class AppViewModel(
                 "error" -> "model"
                 else -> msg.role
             }
-            contents.add("""{"role": "${role}", "parts": [{"text": ${msg.content.toJsonString()}}]}""")
+            if (msg.imageBase64.isNotBlank()) {
+                contents.add("""{"role": "${role}", "parts": [{"text": ${msg.content.toJsonString()}}, {"inline_data": {"mime_type": "image/jpeg", "data": "${msg.imageBase64}"}}]}""")
+            } else {
+                contents.add("""{"role": "${role}", "parts": [{"text": ${msg.content.toJsonString()}}]}""")
+            }
         }
         // Current input
         if (input.isNotBlank()) {
             val timeStr = getTimeString(now)
             val userContent = "[Waktu: $timeStr]\n\n$input"
-            contents.add("""{"role": "user", "parts": [{"text": ${userContent.toJsonString()}}]}""")
+            if (imageBase64.isNotBlank()) {
+                contents.add("""{"role": "user", "parts": [{"text": ${userContent.toJsonString()}}, {"inline_data": {"mime_type": "image/jpeg", "data": "${imageBase64}"}}]}""")
+            } else {
+                contents.add("""{"role": "user", "parts": [{"text": ${userContent.toJsonString()}}]}""")
+            }
         }
         val contentsJson = contents.joinToString(",\n")
         val sysContentG = if (prefs.globalMemory.isNotBlank()) {
@@ -765,7 +781,7 @@ Kamu adalah asisten AI yang membantu dan ramah."""
     private val visionModels: Map<String, String> = mapOf(
         "OpenAI" to "gpt-4o",
         "Anthropic" to "claude-3-5-sonnet-20241022",
-        "Google" to "gemini-1.5-flash",
+        "Google" to "gemini-2.5-flash",
         "Deepseek" to "deepseek-chat",
         "Groq" to "llama-3.2-90b-vision-preview",
         "OpenRouter" to "openai/gpt-4o",
