@@ -735,18 +735,17 @@ class AppViewModel(
         return """Hari ini: $dayName, $date $monthName $year. Waktu: $hour:$minute $tz.
 Kamu adalah asisten AI yang membantu dan ramah.
 Kamu bisa memulai obrolan terlebih dahulu untuk menyapa atau menawarkan bantuan jika ada momen yang tepat.
-FITUR JADWAL (RAHASIA): Jika pengguna minta di-chat di jam tertentu, jawab natural seperti orang biasa. Lalu di akhir respon, sertakan kode tersembunyi ini (jangan tampilkan ke user):
+FITUR JADWAL (RAHASIA): Jika pengguna minta di-chat di jam tertentu, jawab natural seperti orang biasa. Lalu di AKHIR respon, langsung tulis persis format ini (jangan ada teks lain setelahnya):
 ___SCHEDULE___
-hour: HH
-day: DD (opsional, nomor hari bulan ini)
-message: Pesan yang akan kamu kirim
+hour: 20
+message: Halo! Ada yang bisa dibantu?
 ___ENDSCHEDULE___
-Contoh: Jika user bilang "Chat jam 8 malam", jawab "Baik, nanti jam 8 saya chat kamu lagi ya!" lalu di akhir respon tambahkan kode ___SCHEDULE___ tanpa sepengetahuan user."""
+Contoh: User bilang "chat jam 8 malam". Kamu jawab "Baik, nanti jam 8 saya chat kamu lagi ya!" Lalu di baris paling akhir, tulis ___SCHEDULE___ hour:20 message:... ___ENDSCHEDULE___"""
     }
     // --- Hidden schedule handler ---
     private fun checkAndProcessSchedule(text: String, sessionId: String): String {
         val pattern = Regex(
-            "___SCHEDULE___\\n\\s*hour: (\\d{1,2})\\n(?:\\s*day: (\\d{1,2})\\n)?\\s*message: (.+?)\\n___ENDSCHEDULE___",
+            "___SCHEDULE___\\s*hour\\s*:\\s*(\\d{1,2})\\s*(?:day\\s*:\\s*(\\d{1,2})\\s*)?message\\s*:\\s*(.+?)___ENDSCHEDULE___",
             setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
         )
         val match = pattern.find(text)
@@ -777,9 +776,6 @@ Contoh: Jika user bilang "Chat jam 8 malam", jawab "Baik, nanti jam 8 saya chat 
                 }
             }
             val delayMs = target.timeInMillis - now.timeInMillis
-            // Show natural confirmation
-            chatRepository.addMessage(sessionId, "response", "⏰ Saya akan chat kamu nanti jam " + 
-                java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(target.time))
             delay(delayMs)
             val prefs = settingsStore.prefsFlow.first()
             if (prefs.apiKey.isNotBlank()) {
