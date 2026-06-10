@@ -1,12 +1,17 @@
 package com.example.aiclient.network
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.withContext
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 data class ApiResult(
     val statusCode: Int,
@@ -33,7 +38,9 @@ fun String.toJsonString(): String {
 }
 
 class GenericApiClient(
-    private val client: OkHttpClient = OkHttpClient(),
+    private val client: OkHttpClient = OkHttpClient.Builder()
+        .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+        .build(),
 ) {
     fun renderTemplate(
         template: String,
@@ -78,7 +85,8 @@ class GenericApiClient(
             if (verb == "GET" || verb == "HEAD") {
                 requestBuilder.method(verb, null)
             } else {
-                val mediaType = headers["Content-Type"]?.toMediaType() ?: "application/json; charset=utf-8".toMediaType()
+                val mediaType = headers["Content-Type"]?.toMediaType()
+                    ?: "application/json; charset=utf-8".toMediaType()
                 requestBuilder.method(verb, body.toRequestBody(mediaType))
             }
 
@@ -89,6 +97,122 @@ class GenericApiClient(
                     statusMessage = response.message,
                     responseBody = bodyString,
                 )
+            }
+        }
+    }
+
+    fun executeStreaming(
+        url: String,
+        headersText: String,
+        body: String,
+    ): Flow<String> = callbackFlow {
+        val requestBuilder = Request.Builder().url(url.trim())
+        val headers = parseHeaders(headersText)
+        requestBuilder.headers(headers)
+
+        val mediaType = headers["Content-Type"]?.toMediaType()
+            ?: "application/json; charset=utf-8".toMediaType()
+        requestBuilder.method("POST", body.toRequestBody(mediaType))
+
+        val call = client.newCall(requestBuilder.build())
+        call.enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                try { close(e) } catch (_: Exception) {}
+            }
+
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                try {
+                    val body = response.body ?: run {
+                        try { close() } catch (_: Exception) {}
+                        return
+                    }
+                    val reader = BufferedReader(InputStreamReader(body.byteStream()))
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        val l = line ?: continue
+                        if (l.startsWith("data: ")) {
+                            val data = l.removePrefix("data: ").trim()
+                            if (data == "[DONE]") continue
+                            try {
+                                trySend(data)
+                            } catch (_: Exception) {}
+                        }
+                    }
+                    try { close() } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    try { close(e) } catch (_: Exception) {}
+                }
+            }
+        })
+
+        awaitClose { call.cancel() }
+    }
+
+    suspend fun executeStreaming(
+        url: String,
+        method: String,
+        headersText: String,
+        body: String,
+        onToken: (String) -> Unit,
+        onDone: () -> Unit,
+        onError: (String) -> Unit,
+    ) {
+        withContext(Dispatchers.IO) {
+            val requestBuilder = Request.Builder().url(url.trim())
+            val headers = parseHeaders(headersText)
+            requestBuilder.headers(headers)
+
+            val verb = method.trim().uppercase()
+            if (verb == "GET" || verb == "HEAD") {
+                requestBuilder.method(verb, null)
+            } else {
+                val mediaType = headers["Content-Type"]?.toMediaType() ?: "application/json; charset=utf-8".toMediaType()
+                requestBuilder.method(verb, body.toRequestBody(mediaType))
+            }
+
+            try {
+                val response = client.newCall(requestBuilder.build()).execute()
+                val responseBody = response.body ?: run { onError("Empty response body"); return@withContext }
+                
+                if (!response.isSuccessful) {
+                    val errorText = responseBody.string()
+                    onError("HTTP ${response.code}: ${errorText.take(200)}")
+                    return@withContext
+                }
+
+                val source = responseBody.source()
+                var accumulated = ""
+                
+                while (!source.exhausted()) {
+                    val line = source.readUtf8Line() ?: break
+                    
+                    // SSE format: data: {...}
+                    if (line.startsWith("data: ")) {
+                        val data = line.removePrefix("data: ").trim()
+                        if (data == "[DONE]") continue
+                        try {
+                            val json = org.json.JSONObject(data)
+                            // OpenAI format
+                            val choices = json.optJSONArray("choices")
+                            if (choices != null && choices.length() > 0) {
+                                val choice0 = choices.getJSONObject(0)
+                                val delta = choice0.optJSONObject("delta")
+                                val finishReason = choice0.optString("finish_reason")
+                                if (finishReason == "stop") continue
+                                val content = delta?.optString("content", "") ?: ""
+                                if (content.isNotBlank()) {
+                                    accumulated += content
+                                    onToken(content)
+                                }
+                            }
+                        } catch (_: Exception) { }
+                    } else if (line.isNotBlank() && !line.startsWith(":") && !line.startsWith("{")) {
+                        // Non-SSE response - just accumulate
+                    }
+                }
+                onDone()
+            } catch (e: Exception) {
+                onError(e.message ?: "Unknown error")
             }
         }
     }
@@ -107,7 +231,7 @@ class GenericApiClient(
                         builder.add(name, value)
                     }
                 }
-        }
+            }
         return builder.build()
     }
 }

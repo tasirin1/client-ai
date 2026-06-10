@@ -108,6 +108,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.aiclient.data.AppPrefs
@@ -173,6 +176,7 @@ class MainActivity : ComponentActivity() {
                     connectionError = uiState.connectionError,
                     errorLog = uiState.errorLog,
                     onClearErrorLog = vm::clearErrorLog,
+                    streamingText = uiState.streamingText,
                 )
             }
         }
@@ -212,6 +216,7 @@ private fun MainScreen(
     connectionError: String,
     errorLog: String,
     onClearErrorLog: () -> Unit,
+    streamingText: String = "",
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -302,6 +307,7 @@ private fun MainScreen(
                     messages = uiState.messages,
                     isLoading = uiState.isLoading,
                     listState = chatListState,
+                    streamingText = uiState.streamingText,
                     modifier = Modifier.weight(1f),
                     onEditMessage = onEditMessage,
                 )
@@ -563,6 +569,7 @@ private fun ChatArea(
     messages: List<MessageEntity>,
     isLoading: Boolean,
     listState: LazyListState,
+    streamingText: String = "",
     modifier: Modifier = Modifier,
     onEditMessage: ((String, String) -> Unit)? = null,
 ) {
@@ -605,9 +612,214 @@ private fun ChatArea(
                     TypingIndicator()
                 }
             }
+            // Streaming text bubble
+            if (streamingText.isNotBlank()) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
+                        horizontalAlignment = Alignment.Start,
+                    ) {
+                        Text(
+                            text = "Asisten",
+                            color = Color(0xFF66AA66),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
+                        Card(
+                            modifier = Modifier.widthIn(max = 320.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF141E14)),
+                            shape = RoundedCornerShape(topStart = 8.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp),
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                MarkdownText(
+                                    text = streamingText,
+                                    color = Color(0xFFCCEECC),
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "Transmisi...",
+                                    color = Color(0xFF00FF88),
+                                    fontSize = 10.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
+
+@Composable
+private fun MarkdownText(text: String, color: Color = Color(0xFFCCEECC), fontSize: androidx.compose.ui.unit.TextUnit = 15.sp) {
+    val annotatedText = remember(text) {
+        buildAnnotatedString {
+            val lines = text.split("\n")
+            var i = 0
+            while (i < lines.size) {
+                val line = lines[i]
+                if (i > 0 && !line.startsWith("```")) append("\n")
+                
+                // Code block
+                if (line.startsWith("```")) {
+                    val lang = line.removePrefix("```").trim()
+                    val codeLines = mutableListOf<String>()
+                    i++
+                    while (i < lines.size && !lines[i].startsWith("```")) {
+                        codeLines.add(lines[i])
+                        i++
+                    }
+                    val codeText = codeLines.joinToString("\n")
+                    if (codeText.isNotBlank()) {
+                        withStyle(SpanStyle(
+                            color = Color(0xFF00FF88),
+                            background = Color(0xFF0A0D0A),
+                            fontSize = 13.sp,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        )) {
+                            append(codeText)
+                        }
+                    }
+                    i++ // skip closing ```
+                    continue
+                }
+                
+                // Horizontal rule
+                if (line.trim().matches(Regex("^(-{3,}|[*]{3,}|_{3,})$"))) {
+                    append("─".repeat(20))
+                    i++
+                    continue
+                }
+                
+                // Blockquote
+                if (line.startsWith("> ")) {
+                    withStyle(SpanStyle(color = Color(0xFF66AA66), fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) {
+                        append("│ ")
+                        processInline(line.substring(2))
+                    }
+                    i++
+                    continue
+                }
+                
+                // Bullet list
+                if (line.startsWith("- ") || line.startsWith("* ")) {
+                    append("  • ")
+                    processInline(line.substring(2))
+                    i++
+                    continue
+                }
+                
+                // Numbered list
+                val numMatch = Regex("^(\\d+)\\. ").find(line)
+                if (numMatch != null) {
+                    append("  ${numMatch.groupValues[1]}. ")
+                    processInline(line.substring(numMatch.value.length))
+                    i++
+                    continue
+                }
+                
+                // Heading ##
+                val headingMatch = Regex("^(#{1,3})\\s+(.*)").find(line)
+                if (headingMatch != null) {
+                    val level = headingMatch.groupValues[1].length
+                    val headingText = headingMatch.groupValues[2]
+                    withStyle(SpanStyle(
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        fontSize = when(level) { 1 -> 20.sp; 2 -> 18.sp; else -> 16.sp }
+                    )) {
+                        processInline(headingText)
+                    }
+                    i++
+                    continue
+                }
+                
+                // Normal text
+                processInline(line)
+                i++
+            }
+        }
+    }
+    
+    Text(
+        text = annotatedText,
+        color = color,
+        fontSize = fontSize,
+        lineHeight = 22.sp,
+    )
+}
+
+private fun androidx.compose.ui.text.AnnotatedString.Builder.processInline(text: String) {
+    var i = 0
+    while (i < text.length) {
+        when {
+            // Image ![alt](url)
+            text.startsWith("![", i) -> {
+                val closeBracket = text.indexOf("](", i)
+                val closeParen = if (closeBracket > 0) text.indexOf(")", closeBracket + 2) else -1
+                if (closeBracket > 0 && closeParen > closeBracket) {
+                    val alt = text.substring(i + 2, closeBracket)
+                    append("[Gambar: $alt]")
+                    i = closeParen + 1
+                } else { append(text[i]); i++ }
+            }
+            // Link [text](url)
+            text.startsWith("[", i) -> {
+                val closeBracket = text.indexOf("](", i)
+                val closeParen = if (closeBracket > 0) text.indexOf(")", closeBracket + 2) else -1
+                if (closeBracket > 0 && closeParen > closeBracket) {
+                    val linkText = text.substring(i + 1, closeBracket)
+                    withStyle(SpanStyle(
+                        color = Color(0xFF00CCCC),
+                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                    )) {
+                        append(linkText)
+                    }
+                    i = closeParen + 1
+                } else { append(text[i]); i++ }
+            }
+            // Bold **text**
+            text.startsWith("**", i) -> {
+                val end = text.indexOf("**", i + 2)
+                if (end > i) {
+                    withStyle(SpanStyle(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)) {
+                        processInline(text.substring(i + 2, end))
+                    }
+                    i = end + 2
+                } else { append(text[i]); i++ }
+            }
+            // Inline code `text`
+            text.startsWith("`", i) -> {
+                val end = text.indexOf("`", i + 1)
+                if (end > i) {
+                    withStyle(SpanStyle(
+                        color = Color(0xFF00FF88),
+                        background = Color(0xFF0A0D0A),
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontSize = 13.sp,
+                    )) {
+                        append(text.substring(i + 1, end))
+                    }
+                    i = end + 1
+                } else { append(text[i]); i++ }
+            }
+            // Italic *text*
+            text.startsWith("*", i) && !text.startsWith("**", i) -> {
+                val end = text.indexOf("*", i + 1)
+                if (end > i) {
+                    withStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) {
+                        append(text.substring(i + 1, end))
+                    }
+                    i = end + 1
+                } else { append(text[i]); i++ }
+            }
+            else -> { append(text[i]); i++ }
+        }
+    }
+}
+
 
 @Composable
 private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit)? = null) {
@@ -721,12 +933,19 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
                             }
                         }
                     } else {
-                        Text(
-                            text = message.content,
-                            color = textColor,
-                            fontSize = 15.sp,
-                            lineHeight = 22.sp,
-                        )
+                        if (isUser || isError) {
+                            Text(
+                                text = message.content,
+                                color = textColor,
+                                fontSize = 15.sp,
+                                lineHeight = 22.sp,
+                            )
+                        } else {
+                            MarkdownText(
+                                text = message.content,
+                                color = textColor,
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(

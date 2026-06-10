@@ -53,6 +53,7 @@ data class UiState(
     val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
     val connectionError: String = "",
     val errorLog: String = "",
+    val streamingText: String = "",
 )
 private data class CoreUiState(
     val prefs: AppPrefs,
@@ -62,6 +63,7 @@ private data class CoreUiState(
     val connectionStatus: ConnectionStatus,
     val connectionError: String,
     val errorLog: String,
+    val streamingText: String,
 )
 private data class NetworkUiState(
     val isLoading: Boolean,
@@ -92,6 +94,7 @@ class AppViewModel(
     private val connectionStatus = MutableStateFlow(ConnectionStatus.IDLE)
     private val connectionError = MutableStateFlow("")
     private val errorLog = MutableStateFlow("")
+    private val streamingText = MutableStateFlow("")
     private val prefsFlow = settingsStore.prefsFlow
     private val sessionsFlow = chatRepository.observeSessions()
     private val lastMessagesFlow = chatRepository.observeLastMessagesForAllSessions()
@@ -133,7 +136,8 @@ class AppViewModel(
             connStatus to connError
         },
         errorLog,
-    ) { session, connPair, el ->
+        streamingText,
+    ) { session, connPair, el, st ->
         CoreUiState(
             prefs = session.prefs,
             sessions = session.sessions,
@@ -142,6 +146,7 @@ class AppViewModel(
             connectionStatus = connPair.first,
             connectionError = connPair.second,
             errorLog = el,
+            streamingText = st,
         )
     }
     private val networkUiStateFlow = combine(
@@ -178,6 +183,7 @@ class AppViewModel(
             connectionStatus = core.connectionStatus,
             connectionError = core.connectionError,
             errorLog = core.errorLog,
+            streamingText = core.streamingText,
         )
     }.stateIn(
         viewModelScope,
@@ -356,10 +362,11 @@ class AppViewModel(
             }
         }
     }
-    // --- Send Request ---
-    fun sendRequest(input: String = "", imageBase64: String = "") {
+    // --- Send Request with streaming ---
+        fun sendRequest(input: String = "", imageBase64: String = "") {
         viewModelScope.launch {
             loading.value = true
+            streamingText.value = ""
             try {
                 errorMessage.value = ""
                 responseCode.value = null
@@ -372,39 +379,96 @@ class AppViewModel(
                     return@launch
                 }
                 val session = ensureCurrentSession(prefs)
-                // Load messages from ALL sessions for cross-session memory
                 val allHistory = chatRepository.getAllMessagesOnce()
                 val inputForRename = (if (input.isNotBlank()) input else "Gambar").take(28).trim()
-                val (requestUrl, headers, body) = buildRequest(prefs, allHistory, input, imageBase64)
+                // Build request with streaming enabled
+                var (requestUrl, headers, body) = buildRequest(prefs, allHistory, input, imageBase64)
+                // Add stream:true to body for OpenAI-compatible providers
+                if (prefs.apiProvider != "Anthropic" && prefs.apiProvider != "Google") {
+                    body = addStreaming(body)
+                }
                 if (input.isNotBlank() || imageBase64.isNotBlank()) {
                     chatRepository.addMessage(session.id, "request", input, imageBase64)
                 }
+                
+                var accumulatedResponse = ""
+                var streamingSuccess = false
+                
                 runCatching {
-                    apiClient.execute(
+                    apiClient.executeStreaming(
                         url = requestUrl,
                         method = "POST",
                         headersText = headers,
                         body = body,
-                    )
-                }.onSuccess { result ->
-                    if (result.statusCode >= 400) {
-                        val fbInput = if (input.isNotBlank()) input else imageBase64.take(100)
-                        val fallback = tryFallback(session.id, fbInput, result.responseBody, imageBase64)
-                        if (!fallback) {
-                            handleError(session.id, fbInput.ifBlank { body }, Exception("HTTP ${result.statusCode}: ${result.responseBody.take(200)}"))
+                        onToken = { token ->
+                            accumulatedResponse += token
+                            streamingText.value = accumulatedResponse
+                        },
+                        onDone = {
+                            streamingSuccess = true
+                        },
+                        onError = { errMsg ->
+                            appendErrorLog("Streaming error: $errMsg")
                         }
-                    } else {
-                        handleSuccess(session.id, result, inputForRename)
+                    )
+                }
+                
+                if (streamingSuccess && accumulatedResponse.isNotBlank()) {
+                    responseBody.value = accumulatedResponse
+                    chatRepository.addMessage(session.id, "response", accumulatedResponse)
+                    streamingText.value = ""
+                    // Auto-rename session
+                    val session_ = chatRepository.getSessionOnce(session.id)
+                    if (session_?.title?.startsWith("Chat") != false || session_?.title?.startsWith("Sesi") != false) {
+                        chatRepository.renameSession(session.id, inputForRename.ifBlank { "Chat" })
                     }
-                }.onFailure { throwable ->
-                    val fbInput = if (input.isNotBlank()) input else imageBase64.take(100)
-                    val fallback = tryFallback(session.id, fbInput, throwable.message ?: "", imageBase64)
-                    if (!fallback) handleError(session.id, fbInput.ifBlank { body }, throwable)
+                } else if (!streamingSuccess) {
+                    // Fallback to non-streaming
+                    runCatching {
+                        apiClient.execute(
+                            url = requestUrl,
+                            method = "POST",
+                            headersText = headers,
+                            body = removeStreaming(body),
+                        )
+                    }.onSuccess { result ->
+                        if (result.statusCode >= 400) {
+                            val fbInput = if (input.isNotBlank()) input else imageBase64.take(100)
+                            val fallback = tryFallback(session.id, fbInput, result.responseBody, imageBase64)
+                            if (!fallback) {
+                                handleError(session.id, fbInput.ifBlank { body }, Exception("HTTP ${result.statusCode}: ${result.responseBody.take(200)}"))
+                            }
+                        } else {
+                            handleSuccess(session.id, result, inputForRename)
+                        }
+                    }.onFailure { throwable ->
+                        val fbInput = if (input.isNotBlank()) input else imageBase64.take(100)
+                        val fallback = tryFallback(session.id, fbInput, throwable.message ?: "", imageBase64)
+                        if (!fallback) handleError(session.id, fbInput.ifBlank { body }, throwable)
+                    }
                 }
             } finally {
+                streamingText.value = ""
                 loading.value = false
             }
         }
+    }
+    
+    private fun addStreaming(body: String): String {
+        // Add "stream": true to the JSON body
+        return try {
+            val json = org.json.JSONObject(body)
+            json.put("stream", true)
+            json.toString(2)
+        } catch (_: Exception) { body }
+    }
+    
+    private fun removeStreaming(body: String): String {
+        return try {
+            val json = org.json.JSONObject(body)
+            json.remove("stream")
+            json.toString(2)
+        } catch (_: Exception) { body }
     }
     fun editMessageAndRegenerate(messageId: String, newContent: String, imageBase64: String = "") {
         viewModelScope.launch {
@@ -525,6 +589,7 @@ class AppViewModel(
             appendLine("    $messagesJson")
             appendLine("  ],")
             appendLine("  \"temperature\": ${prefs.temperature},")
+            appendLine("  \"stream\": true,")
             appendLine("  \"max_tokens\": ${prefs.maxTokens}")
             append("}")
         }
