@@ -237,7 +237,7 @@ private fun MainScreen(
         drawerContent = {
             ModalDrawerSheet(
                 modifier = Modifier.width(320.dp),
-                drawerContainerColor = Color(0xFF161616),
+                drawerContainerColor = Color(0xFF0D120D),
             ) {
                 SessionSidebar(
                     groupedSessions = uiState.groupedSessions,
@@ -277,17 +277,17 @@ private fun MainScreen(
                     },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Default.Menu, contentDescription = "Menu", tint = Color(0xFFE0E0E0))
+                            Icon(Icons.Default.Menu, contentDescription = "Menu", tint = Color(0xFFCCEECC))
                         }
                     },
                     actions = {
                         IconButton(onClick = onCreateSession) {
-                            Icon(Icons.Default.Add, contentDescription = "New Chat", tint = Color(0xFFE0E0E0))
+                            Icon(Icons.Default.Add, contentDescription = "New Chat", tint = Color(0xFFCCEECC))
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color(0xFF161616),
-                        titleContentColor = Color(0xFFE0E0E0),
+                        containerColor = Color(0xFF0D120D),
+                        titleContentColor = Color(0xFFCCEECC),
                     ),
                 )
             },
@@ -295,7 +295,7 @@ private fun MainScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF121212))
+                    .background(Color(0xFF0A0D0A))
                     .padding(padding),
             ) {
                 ChatArea(
@@ -354,7 +354,7 @@ private fun SessionSidebar(
     Column(
         modifier = Modifier
             .fillMaxHeight()
-            .background(Color(0xFF161616)),
+            .background(Color(0xFF0D120D)),
     ) {
         // New Chat button
         Button(
@@ -363,7 +363,7 @@ private fun SessionSidebar(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF10A37F),
+                containerColor = Color(0xFF00FF88),
                 contentColor = Color.White,
             ),
             shape = RoundedCornerShape(10.dp),
@@ -380,25 +380,25 @@ private fun SessionSidebar(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp),
-            placeholder = { Text("Cari chat...", color = Color(0xFF666666), fontSize = 14.sp) },
+            placeholder = { Text("Cari chat...", color = Color(0xFF448844), fontSize = 14.sp) },
             leadingIcon = {
-                Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF666666), modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF448844), modifier = Modifier.size(18.dp))
             },
             trailingIcon = {
                 if (searchQuery.isNotBlank()) {
                     IconButton(onClick = { onSearchChange("") }, modifier = Modifier.size(20.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Hapus", tint = Color(0xFF666666), modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Close, contentDescription = "Hapus", tint = Color(0xFF448844), modifier = Modifier.size(16.dp))
                     }
                 }
             },
             singleLine = true,
-            textStyle = MaterialTheme.typography.bodySmall.copy(color = Color(0xFFE0E0E0)),
+            textStyle = MaterialTheme.typography.bodySmall.copy(color = Color(0xFFCCEECC)),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF10A37F),
-                unfocusedBorderColor = Color(0xFF333333),
-                cursorColor = Color(0xFF10A37F),
-                focusedContainerColor = Color(0xFF1E1E1E),
-                unfocusedContainerColor = Color(0xFF1E1E1E),
+                focusedBorderColor = Color(0xFF00FF88),
+                unfocusedBorderColor = Color(0xFF1A331A),
+                cursorColor = Color(0xFF00FF88),
+                focusedContainerColor = Color(0xFF141E14),
+                unfocusedContainerColor = Color(0xFF141E14),
             ),
             shape = RoundedCornerShape(10.dp),
         )
@@ -413,7 +413,7 @@ private fun SessionSidebar(
                 item {
                     Text(
                         text = groupName,
-                        color = Color(0xFF888888),
+                        color = Color(0xFF66AA66),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -443,7 +443,7 @@ private fun SessionSidebar(
                     ) {
                         Text(
                             text = "Tidak ada chat",
-                            color = Color(0xFF666666),
+                            color = Color(0xFF448844),
                             fontSize = 13.sp,
                         )
                     }
@@ -457,20 +457,20 @@ private fun SessionSidebar(
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp)
                 .clickable { onOpenSettings() }
-                .background(Color(0xFF1E1E1E), RoundedCornerShape(10.dp))
+                .background(Color(0xFF141E14), RoundedCornerShape(10.dp))
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.Settings,
                     contentDescription = "Pengaturan",
-                    tint = Color(0xFF888888),
+                    tint = Color(0xFF66AA66),
                     modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     "Pengaturan",
-                    color = Color(0xFFE0E0E0),
+                    color = Color(0xFFCCEECC),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                 )
@@ -493,7 +493,7 @@ private fun SessionCard(
             .padding(horizontal = 8.dp)
             .clickable { onSelect },
         colors = CardDefaults.cardColors(
-            containerColor = if (isActive) Color(0xFF2A2A2A) else Color(0xFF161616),
+            containerColor = if (isActive) Color(0xFF1A2A1A) else Color(0xFF0D120D),
         ),
         shape = RoundedCornerShape(10.dp),
     ) {
@@ -512,7 +512,7 @@ private fun SessionCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = preview.session.title,
-                    color = if (isActive) Color.White else Color(0xFFCCCCCC),
+                    color = if (isActive) Color.White else Color(0xFFBBEebb),
                     fontSize = 13.sp,
                     fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines = 1,
@@ -523,7 +523,7 @@ private fun SessionCard(
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(
                         text = preview.lastMessage,
-                        color = Color(0xFF777777),
+                        color = Color(0xFF559955),
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -535,7 +535,7 @@ private fun SessionCard(
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = formatDateLabel(preview.lastMessageTime),
-                        color = Color(0xFF555555),
+                        color = Color(0xFF337733),
                         fontSize = 10.sp,
                     )
                 }
@@ -549,7 +549,7 @@ private fun SessionCard(
                     Icon(
                         Icons.Default.Delete,
                         contentDescription = "Hapus",
-                        tint = Color(0xFF555555),
+                        tint = Color(0xFF337733),
                         modifier = Modifier.size(14.dp),
                     )
                 }
@@ -570,7 +570,7 @@ private fun ChatArea(
         Column(
             modifier = modifier
                 .fillMaxWidth()
-                .background(Color(0xFF121212)),
+                .background(Color(0xFF0A0D0A)),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -578,13 +578,13 @@ private fun ChatArea(
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = "Mulai chat baru",
-                color = Color(0xFF888888),
+                color = Color(0xFF66AA66),
                 fontSize = 16.sp,
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Atur API Key di pengaturan lalu kirim pesan",
-                color = Color(0xFF666666),
+                color = Color(0xFF448844),
                 fontSize = 13.sp,
             )
         }
@@ -593,7 +593,7 @@ private fun ChatArea(
             state = listState,
             modifier = modifier
                 .fillMaxWidth()
-                .background(Color(0xFF121212))
+                .background(Color(0xFF0A0D0A))
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -620,13 +620,13 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
     var editText by remember { mutableStateOf(message.content) }
 
     val backgroundColor = when {
-        isError -> Color(0xFF3D1A1A)
-        isUser -> Color(0xFF1E3A3A)
-        else -> Color(0xFF1E1E1E)
+        isError -> Color(0xFF2A0D0D)
+        isUser -> Color(0xFF0D2A1A)
+        else -> Color(0xFF141E14)
     }
     val textColor = when {
-        isError -> Color(0xFFEF9A9A)
-        else -> Color(0xFFE0E0E0)
+        isError -> Color(0xFFFF6688)
+        else -> Color(0xFFCCEECC)
     }
 
     Column(
@@ -638,7 +638,7 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
         // Role label
         Text(
             text = if (isUser) "Kamu" else if (isError) "Error" else "Asisten",
-            color = if (isUser) Color(0xFF10A37F) else if (isError) Color(0xFFEF9A9A) else Color(0xFF888888),
+            color = if (isUser) Color(0xFF00FF88) else if (isError) Color(0xFFFF6688) else Color(0xFF66AA66),
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
@@ -691,13 +691,13 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
                             minLines = 2,
                             maxLines = 5,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF10A37F),
-                                unfocusedBorderColor = Color(0xFF333333),
-                                cursorColor = Color(0xFF10A37F),
+                                focusedBorderColor = Color(0xFF00FF88),
+                                unfocusedBorderColor = Color(0xFF1A331A),
+                                cursorColor = Color(0xFF00FF88),
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,
-                                focusedContainerColor = Color(0xFF121212),
-                                unfocusedContainerColor = Color(0xFF121212),
+                                focusedContainerColor = Color(0xFF0A0D0A),
+                                unfocusedContainerColor = Color(0xFF0A0D0A),
                             ),
                             shape = RoundedCornerShape(8.dp),
                         )
@@ -708,7 +708,7 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
                                     editing = false
                                     onEdit?.invoke(message.id, editText)
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00FF88)),
                                 shape = RoundedCornerShape(8.dp),
                             ) {
                                 Text("Simpan", fontSize = 12.sp)
@@ -736,7 +736,7 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
                     ) {
                         Text(
                             text = formatMessageTime(message.timestamp),
-                            color = Color(0xFF666666),
+                            color = Color(0xFF448844),
                             fontSize = 11.sp,
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -756,7 +756,7 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
                                     Icon(
                                         Icons.Default.ContentCopy,
                                         contentDescription = "Salin",
-                                        tint = if (showCopied.value) Color(0xFF10A37F) else Color(0xFF666666),
+                                        tint = if (showCopied.value) Color(0xFF00FF88) else Color(0xFF448844),
                                         modifier = Modifier.size(16.dp),
                                     )
                                 }
@@ -770,7 +770,7 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
                                     Icon(
                                         Icons.Default.Edit,
                                         contentDescription = "Edit",
-                                        tint = Color(0xFF666666),
+                                        tint = Color(0xFF448844),
                                         modifier = Modifier.size(16.dp),
                                     )
                                 }
@@ -805,7 +805,7 @@ private fun ComposerBar(
     }
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF111811)),
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
     ) {
         Row(
@@ -820,7 +820,7 @@ private fun ComposerBar(
                 placeholder = {
                     Text(
                         "Ketik pesan...",
-                        color = Color(0xFF666666),
+                        color = Color(0xFF448844),
                     )
                 },
                 singleLine = false,
@@ -828,14 +828,14 @@ private fun ComposerBar(
                 minLines = 1,
                 maxLines = 6,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
-                    color = Color(0xFFE0E0E0),
+                    color = Color(0xFFCCEECC),
                 ),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF10A37F),
-                    unfocusedBorderColor = Color(0xFF333333),
-                    cursorColor = Color(0xFF10A37F),
-                    focusedContainerColor = Color(0xFF121212),
-                    unfocusedContainerColor = Color(0xFF121212),
+                    focusedBorderColor = Color(0xFF00FF88),
+                    unfocusedBorderColor = Color(0xFF1A331A),
+                    cursorColor = Color(0xFF00FF88),
+                    focusedContainerColor = Color(0xFF0A0D0A),
+                    unfocusedContainerColor = Color(0xFF0A0D0A),
                 ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = {
@@ -860,7 +860,7 @@ private fun ComposerBar(
                     Icon(
                         Icons.Default.Close,
                         contentDescription = "Hapus gambar",
-                        tint = Color(0xFF10A37F),
+                        tint = Color(0xFF00FF88),
                         modifier = Modifier.size(18.dp),
                     )
                 }
@@ -874,7 +874,7 @@ private fun ComposerBar(
                 Icon(
                     Icons.Default.AttachFile,
                     contentDescription = "Lampirkan gambar",
-                    tint = if (imageBase64.isNotBlank()) Color(0xFF10A37F) else Color(0xFF666666),
+                    tint = if (imageBase64.isNotBlank()) Color(0xFF00FF88) else Color(0xFF448844),
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -891,9 +891,9 @@ private fun ComposerBar(
                 enabled = !isLoading && (inputText.isNotBlank() || imageBase64.isNotBlank()),
                 shape = CircleShape,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF10A37F),
+                    containerColor = Color(0xFF00FF88),
                     contentColor = Color.White,
-                    disabledContainerColor = Color(0xFF333333),
+                    disabledContainerColor = Color(0xFF1A331A),
                 ),
                 modifier = Modifier.size(48.dp),
                 contentPadding = PaddingValues(0.dp),
@@ -954,9 +954,9 @@ private fun SettingsDialog(
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1E1E1E),
+        containerColor = Color(0xFF141E14),
         titleContentColor = Color.White,
-        textContentColor = Color(0xFFE0E0E0),
+        textContentColor = Color(0xFFCCEECC),
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         title = {
             Text(
@@ -974,7 +974,7 @@ private fun SettingsDialog(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 // Provider buttons
-                Text("Provider", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text("Provider", color = Color(0xFF66AA66), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -987,7 +987,7 @@ private fun SettingsDialog(
                                 onUpdateProvider(provider)
                             },
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = if (isSelected) Color(0xFF10A37F) else Color(0xFF888888),
+                                contentColor = if (isSelected) Color(0xFF00FF88) else Color(0xFF66AA66),
                             ),
                         ) {
                             Text(provider, fontSize = 12.sp)
@@ -996,7 +996,7 @@ private fun SettingsDialog(
                 }
 
                 // API Key
-                Text("API Key", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text("API Key", color = Color(0xFF66AA66), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 OutlinedTextField(
                     value = apiKey.value,
                     onValueChange = {
@@ -1004,32 +1004,32 @@ private fun SettingsDialog(
                         onUpdateApiKey(it)
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("sk-...", color = Color(0xFF555555)) },
+                    placeholder = { Text("sk-...", color = Color(0xFF337733)) },
                     visualTransformation = if (showApiKey.value) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
                         TextButton(onClick = { showApiKey.value = !showApiKey.value }) {
                             Text(
                                 if (showApiKey.value) "Sembunyi" else "Lihat",
-                                color = Color(0xFF10A37F),
+                                color = Color(0xFF00FF88),
                                 fontSize = 11.sp,
                             )
                         }
                     },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF10A37F),
-                        unfocusedBorderColor = Color(0xFF333333),
-                        cursorColor = Color(0xFF10A37F),
+                        focusedBorderColor = Color(0xFF00FF88),
+                        unfocusedBorderColor = Color(0xFF1A331A),
+                        cursorColor = Color(0xFF00FF88),
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        focusedContainerColor = Color(0xFF121212),
-                        unfocusedContainerColor = Color(0xFF121212),
+                        focusedContainerColor = Color(0xFF0A0D0A),
+                        unfocusedContainerColor = Color(0xFF0A0D0A),
                     ),
                     shape = RoundedCornerShape(8.dp),
                 )
 
                 // Model selection
-                Text("Model", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text("Model", color = Color(0xFF66AA66), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     // Default models
                     Row(
@@ -1044,7 +1044,7 @@ private fun SettingsDialog(
                                     onUpdateModel(model)
                                 },
                                 colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = if (isSelected) Color(0xFF10A37F) else Color(0xFF888888),
+                                    contentColor = if (isSelected) Color(0xFF00FF88) else Color(0xFF66AA66),
                                 ),
                             ) {
                                 Text(model, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1062,7 +1062,7 @@ private fun SettingsDialog(
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.background(
-                                        if (isSelected) Color(0xFF10A37F).copy(alpha=0.15f) else Color.Transparent,
+                                        if (isSelected) Color(0xFF00FF88).copy(alpha=0.15f) else Color.Transparent,
                                         RoundedCornerShape(8.dp)
                                     ),
                                 ) {
@@ -1072,7 +1072,7 @@ private fun SettingsDialog(
                                             onUpdateModel(model)
                                         },
                                         colors = ButtonDefaults.outlinedButtonColors(
-                                            contentColor = if (isSelected) Color(0xFF10A37F) else Color(0xFFBBBBBB),
+                                            contentColor = if (isSelected) Color(0xFF00FF88) else Color(0xFF66AA66),
                                         ),
                                         modifier = Modifier.padding(end = 0.dp),
                                     ) {
@@ -1088,7 +1088,7 @@ private fun SettingsDialog(
                                         Icon(
                                             Icons.Default.Close,
                                             contentDescription = "Hapus",
-                                            tint = Color(0xFF666666),
+                                            tint = Color(0xFF448844),
                                             modifier = Modifier.size(14.dp),
                                         )
                                     }
@@ -1104,17 +1104,17 @@ private fun SettingsDialog(
                         OutlinedTextField(
                             value = newCustomModel.value,
                             onValueChange = { newCustomModel.value = it },
-                            placeholder = { Text("Nama model kustom...", color = Color(0xFF555555)) },
+                            placeholder = { Text("Nama model kustom...", color = Color(0xFF337733)) },
                             singleLine = true,
                             modifier = Modifier.weight(1f),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF10A37F),
-                                unfocusedBorderColor = Color(0xFF333333),
-                                cursorColor = Color(0xFF10A37F),
+                                focusedBorderColor = Color(0xFF00FF88),
+                                unfocusedBorderColor = Color(0xFF1A331A),
+                                cursorColor = Color(0xFF00FF88),
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,
-                                focusedContainerColor = Color(0xFF121212),
-                                unfocusedContainerColor = Color(0xFF121212),
+                                focusedContainerColor = Color(0xFF0A0D0A),
+                                unfocusedContainerColor = Color(0xFF0A0D0A),
                             ),
                             shape = RoundedCornerShape(8.dp),
                         )
@@ -1127,7 +1127,7 @@ private fun SettingsDialog(
                                     newCustomModel.value = ""
                                 }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00FF88)),
                             shape = RoundedCornerShape(8.dp),
                         ) {
                             Text("Tambah", fontSize = 11.sp, color = Color.White)
@@ -1136,7 +1136,7 @@ private fun SettingsDialog(
                 }
 
                 // Base URL
-                Text("Base URL", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text("Base URL", color = Color(0xFF66AA66), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 OutlinedTextField(
                     value = baseUrl.value,
                     onValueChange = {
@@ -1146,13 +1146,13 @@ private fun SettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF10A37F),
-                        unfocusedBorderColor = Color(0xFF333333),
-                        cursorColor = Color(0xFF10A37F),
+                        focusedBorderColor = Color(0xFF00FF88),
+                        unfocusedBorderColor = Color(0xFF1A331A),
+                        cursorColor = Color(0xFF00FF88),
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        focusedContainerColor = Color(0xFF121212),
-                        unfocusedContainerColor = Color(0xFF121212),
+                        focusedContainerColor = Color(0xFF0A0D0A),
+                        unfocusedContainerColor = Color(0xFF0A0D0A),
                     ),
                     shape = RoundedCornerShape(8.dp),
                 )
@@ -1160,7 +1160,7 @@ private fun SettingsDialog(
                 // Temperature
                 Text(
                     "Temperature: ${"%.1f".format(temperature.floatValue)}",
-                    color = Color(0xFF888888),
+                    color = Color(0xFF66AA66),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                 )
@@ -1174,14 +1174,14 @@ private fun SettingsDialog(
                     steps = 19,
                     modifier = Modifier.fillMaxWidth(),
                     colors = SliderDefaults.colors(
-                        activeTrackColor = Color(0xFF10A37F),
-                        inactiveTrackColor = Color(0xFF333333),
-                        thumbColor = Color(0xFF10A37F),
+                        activeTrackColor = Color(0xFF00FF88),
+                        inactiveTrackColor = Color(0xFF1A331A),
+                        thumbColor = Color(0xFF00FF88),
                     ),
                 )
 
                 // Max Tokens
-                Text("Max Tokens", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text("Max Tokens", color = Color(0xFF66AA66), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 OutlinedTextField(
                     value = maxTokens.value,
                     onValueChange = {
@@ -1192,23 +1192,23 @@ private fun SettingsDialog(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF10A37F),
-                        unfocusedBorderColor = Color(0xFF333333),
-                        cursorColor = Color(0xFF10A37F),
+                        focusedBorderColor = Color(0xFF00FF88),
+                        unfocusedBorderColor = Color(0xFF1A331A),
+                        cursorColor = Color(0xFF00FF88),
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        focusedContainerColor = Color(0xFF121212),
-                        unfocusedContainerColor = Color(0xFF121212),
+                        focusedContainerColor = Color(0xFF0A0D0A),
+                        unfocusedContainerColor = Color(0xFF0A0D0A),
                     ),
                     shape = RoundedCornerShape(8.dp),
                 )
 
 
                 // Test Connection
-                Text("Test Koneksi", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text("Test Koneksi", color = Color(0xFF66AA66), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF111811)),
                     shape = RoundedCornerShape(8.dp),
                 ) {
                     Row(
@@ -1222,13 +1222,13 @@ private fun SettingsDialog(
                                 Icon(
                                     Icons.Default.Search,
                                     contentDescription = null,
-                                    tint = Color(0xFF666666),
+                                    tint = Color(0xFF448844),
                                     modifier = Modifier.size(18.dp),
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
                                     "Belum dicek",
-                                    color = Color(0xFF666666),
+                                    color = Color(0xFF448844),
                                     fontSize = 13.sp,
                                     modifier = Modifier.weight(1f),
                                 )
@@ -1236,13 +1236,13 @@ private fun SettingsDialog(
                             ConnectionStatus.TESTING -> {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
-                                    color = Color(0xFF10A37F),
+                                    color = Color(0xFF00FF88),
                                     strokeWidth = 2.dp,
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
                                     "Mengetes...",
-                                    color = Color(0xFF888888),
+                                    color = Color(0xFF66AA66),
                                     fontSize = 13.sp,
                                     modifier = Modifier.weight(1f),
                                 )
@@ -1253,7 +1253,7 @@ private fun SettingsDialog(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         "Terhubung",
-                                        color = Color(0xFF10A37F),
+                                        color = Color(0xFF00FF88),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
                                     )
@@ -1265,14 +1265,14 @@ private fun SettingsDialog(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         "Gagal",
-                                        color = Color(0xFFEF9A9A),
+                                        color = Color(0xFFFF6688),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
                                     )
                                     if (connectionError.isNotBlank()) {
                                         Text(
                                             connectionError,
-                                            color = Color(0xFF888888),
+                                            color = Color(0xFF66AA66),
                                             fontSize = 11.sp,
                                             maxLines = 4,
                                             overflow = TextOverflow.Ellipsis,
@@ -1286,7 +1286,7 @@ private fun SettingsDialog(
                             onClick = onTestConnection,
                             enabled = connectionStatus != ConnectionStatus.TESTING,
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = Color(0xFF10A37F),
+                                contentColor = Color(0xFF00FF88),
                             ),
                         ) {
                             Text("Test", fontSize = 12.sp)
@@ -1294,7 +1294,7 @@ private fun SettingsDialog(
                     }
                 }
                 // System Prompt
-                Text("System Prompt", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text("System Prompt", color = Color(0xFF66AA66), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 OutlinedTextField(
                     value = systemPrompt.value,
                     onValueChange = {
@@ -1305,13 +1305,13 @@ private fun SettingsDialog(
                     minLines = 3,
                     maxLines = 5,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF10A37F),
-                        unfocusedBorderColor = Color(0xFF333333),
-                        cursorColor = Color(0xFF10A37F),
+                        focusedBorderColor = Color(0xFF00FF88),
+                        unfocusedBorderColor = Color(0xFF1A331A),
+                        cursorColor = Color(0xFF00FF88),
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        focusedContainerColor = Color(0xFF121212),
-                        unfocusedContainerColor = Color(0xFF121212),
+                        focusedContainerColor = Color(0xFF0A0D0A),
+                        unfocusedContainerColor = Color(0xFF0A0D0A),
                     ),
                     shape = RoundedCornerShape(8.dp),
                 )
@@ -1319,7 +1319,7 @@ private fun SettingsDialog(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 // Error Log section
-                Text("Error Log", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text("Error Log", color = Color(0xFF66AA66), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 if (errorLog.isNotBlank()) {
                     val clipboard = LocalClipboardManager.current
                     OutlinedTextField(
@@ -1330,14 +1330,14 @@ private fun SettingsDialog(
                         minLines = 3,
                         maxLines = 8,
                         textStyle = MaterialTheme.typography.bodySmall.copy(
-                            color = Color(0xFFCC6666),
+                            color = Color(0xFFFF6688),
                             fontSize = 11.sp,
                         ),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF555555),
-                            unfocusedBorderColor = Color(0xFF333333),
-                            focusedContainerColor = Color(0xFF121212),
-                            unfocusedContainerColor = Color(0xFF121212),
+                            focusedBorderColor = Color(0xFF337733),
+                            unfocusedBorderColor = Color(0xFF1A331A),
+                            focusedContainerColor = Color(0xFF0A0D0A),
+                            unfocusedContainerColor = Color(0xFF0A0D0A),
                         ),
                         shape = RoundedCornerShape(8.dp),
                     )
@@ -1346,13 +1346,13 @@ private fun SettingsDialog(
                             onClick = {
                                 clipboard.setText(androidx.compose.ui.text.AnnotatedString(errorLog))
                             },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF10A37F)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF00FF88)),
                         ) {
                             Text("Salin Log", fontSize = 12.sp)
                         }
                         OutlinedButton(
                             onClick = onClearErrorLog,
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF6B6B)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF4466)),
                         ) {
                             Text("Bersihkan", fontSize = 12.sp)
                         }
@@ -1360,7 +1360,7 @@ private fun SettingsDialog(
                 } else {
                     Text(
                         "Belum ada error",
-                        color = Color(0xFF555555),
+                        color = Color(0xFF337733),
                         fontSize = 12.sp,
                     )
                 }
@@ -1368,7 +1368,7 @@ private fun SettingsDialog(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 // Backup / Restore buttons
-                Text("Data", color = Color(0xFF888888), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text("Data", color = Color(0xFF66AA66), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1376,14 +1376,14 @@ private fun SettingsDialog(
                     OutlinedButton(
                         onClick = onBackup,
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF10A37F)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF00FF88)),
                     ) {
                         Text(" Backup", fontSize = 12.sp)
                     }
                     OutlinedButton(
                         onClick = onRestore,
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF6B6B)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF4466)),
                     ) {
                         Text("Restore", fontSize = 12.sp)
                     }
@@ -1396,7 +1396,7 @@ private fun SettingsDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00FF88)),
                 shape = RoundedCornerShape(10.dp),
             ) {
                 Text("Simpan & Tutup", color = Color.White, fontWeight = FontWeight.SemiBold)
@@ -1478,19 +1478,19 @@ private fun TypingIndicator() {
                         scaleX = dotScale
                         scaleY = dotScale
                     }
-                    .background(Color(0xFF10A37F), CircleShape)
+                    .background(Color(0xFF00FF88), CircleShape)
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
         CircularProgressIndicator(
             modifier = Modifier.size(14.dp),
-            color = Color(0xFF10A37F),
+            color = Color(0xFF00FF88),
             strokeWidth = 2.dp,
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
-            "AI mengetik...",
-            color = Color(0xFF888888),
+            "AI mentransmisi...",
+            color = Color(0xFF66AA66),
             fontSize = 13.sp,
         )
     }
