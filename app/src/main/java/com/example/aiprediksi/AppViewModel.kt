@@ -14,6 +14,7 @@ import com.example.aiprediksi.data.ChartInterval
 import com.example.aiprediksi.data.MarketDataRepository
 import com.example.aiprediksi.data.MessageEntity
 import com.example.aiprediksi.data.OHLCV
+import com.example.aiprediksi.data.OHLCVUpdate
 import com.example.aiprediksi.data.PredictionDirection
 import com.example.aiprediksi.data.ProviderConfig
 import com.example.aiprediksi.data.RiskLevel
@@ -38,6 +39,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -55,6 +57,9 @@ data class UiState(
     val supports: List<Double> = emptyList(),
     val resistances: List<Double> = emptyList(),
     val hoveredCandle: OHLCV? = null,
+    // Chart zoom
+    val visibleCandleCount: Int = 80,
+    val isLive: Boolean = false,
     // AI
     val isAnalyzing: Boolean = false,
     val analysisResult: AnalysisResult? = null,
@@ -83,6 +88,8 @@ class AppViewModel(
     private val supports = MutableStateFlow<List<Double>>(emptyList())
     private val resistances = MutableStateFlow<List<Double>>(emptyList())
     private val hoveredCandle = MutableStateFlow<OHLCV?>(null)
+    private val visibleCandleCount = MutableStateFlow(80)
+    private val isLive = MutableStateFlow(false)
     private val isAnalyzing = MutableStateFlow(false)
     private val analysisResult = MutableStateFlow<AnalysisResult?>(null)
     private val streamingAnalysis = MutableStateFlow("")
@@ -126,6 +133,10 @@ class AppViewModel(
     init {
         // Load default asset on start
         selectAsset(AssetDatabase.cryptoAssets.first())
+        // Start auto-refresh loop
+        startAutoRefresh()
+        // Start WebSocket stream
+        startKlineStream()
     }
 
     // ======================== ASSET & INTERVAL ========================
@@ -146,10 +157,99 @@ class AppViewModel(
 
     fun setHoveredCandle(c: OHLCV?) { hoveredCandle.value = c }
 
+    fun setVisibleCandleCount(count: Int) { visibleCandleCount.value = count.coerceIn(10, 200) }
+
+    fun toggleLive() {
+        isLive.value = !isLive.value
+        if (isLive.value) {
+            startAutoRefresh()
+            startKlineStream()
+        }
+    }
+
     fun toggleSettings() { showSettings.value = !showSettings.value }
 
     fun updateSetting(transform: (AppPrefs) -> AppPrefs) {
         viewModelScope.launch { settingsStore.update(transform) }
+    }
+
+    // ======================== AUTO-REFRESH ========================
+
+    private var refreshJob: kotlinx.coroutines.Job? = null
+
+    private fun startAutoRefresh() {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            while (true) {
+                if (!isLive.value) break
+                delay(getRefreshInterval())
+                fetchMarketData()
+            }
+        }
+    }
+
+    private fun getRefreshInterval(): Long {
+        if (!isLive.value) return Long.MAX_VALUE
+        return when (interval.value) {
+            ChartInterval.M1 -> 15_000L
+            ChartInterval.M5 -> 30_000L
+            ChartInterval.M15 -> 60_000L
+            ChartInterval.M30 -> 120_000L
+            ChartInterval.H1 -> 180_000L
+            ChartInterval.H4 -> 300_000L
+            ChartInterval.H12 -> 600_000L
+            ChartInterval.D1 -> 600_000L
+            ChartInterval.W1 -> 1_800_000L
+        }
+    }
+
+    // ======================== WEBSOCKET STREAM ========================
+
+    private var wsJob: kotlinx.coroutines.Job? = null
+
+    private fun startKlineStream() {
+        wsJob?.cancel()
+        wsJob = viewModelScope.launch {
+            val asset = selectedAsset.value
+            val symbol = marketDataRepo.getBinanceSymbol(asset)
+            val intv = interval.value.binanceValue
+
+            marketDataRepo.klineStream(symbol, intv).collect { update ->
+                if (!isLive.value) return@collect
+                val current = candles.value.toMutableList()
+                if (current.isNotEmpty()) {
+                    val last = current.last()
+                    if (last.openTime == update.openTime) {
+                        // Update last candle (still forming)
+                        current[current.size - 1] = OHLCV(
+                            openTime = update.openTime,
+                            open = update.open,
+                            high = maxOf(last.high, update.high),
+                            low = minOf(last.low, update.low),
+                            close = update.close,
+                            volume = update.volume,
+                            closeTime = update.closeTime,
+                        )
+                        if (update.isClosed) {
+                            // Add next candle and fetch full data
+                            fetchMarketData()
+                        }
+                    } else if (update.openTime > last.openTime) {
+                        // New candle started
+                        current.add(OHLCV(
+                            openTime = update.openTime,
+                            open = update.open,
+                            high = update.high,
+                            low = update.low,
+                            close = update.close,
+                            volume = update.volume,
+                            closeTime = update.closeTime,
+                        ))
+                    }
+                    candles.value = current
+                }
+            }
+        }
     }
 
     // ======================== MARKET DATA ========================

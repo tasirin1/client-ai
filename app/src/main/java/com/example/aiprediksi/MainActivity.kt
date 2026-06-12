@@ -72,6 +72,7 @@ import com.example.aiprediksi.data.getDefaultModel
 import com.example.aiprediksi.data.getModelsForProvider
 import com.example.aiprediksi.ui.PrediksiAITheme
 import com.example.aiprediksi.ui.components.CandlestickChart
+import com.example.aiprediksi.ui.components.ChartStatusBar
 import com.example.aiprediksi.ui.components.PriceInfoBar
 
 class MainActivity : ComponentActivity() {
@@ -170,10 +171,19 @@ fun DashboardScreen(appContainer: AppContainer) {
                 } else {
                     CandlestickChart(
                         candles = state.candles,
+                        isLive = state.isLive,
                         onCrosshairMove = { vm.setHoveredCandle(it) },
                     )
                 }
             }
+
+            // ===== CHART STATUS BAR ====
+            ChartStatusBar(
+                isLive = state.isLive,
+                zoomLevel = state.visibleCandleCount,
+                totalCandles = state.candles.size,
+                onToggleLive = { vm.toggleLive() },
+            )
 
             // ===== PRICE INFO =====
             if (state.hoveredCandle != null) {
