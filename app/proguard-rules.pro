@@ -1,0 +1,3 @@
+-keepattributes *Annotation*
+-keep class com.example.aiprediksi.data.** { *; }
+-keep class com.example.aiprediksi.network.** { *; }
