@@ -592,9 +592,14 @@ private fun PredictionContent(text: String) {
 private fun StreamingBubble(text: String) {
     Box(
         modifier = Modifier
-            .widthIn(max = 320.dp)
-            .align(Alignment.Start)
-            .background(
+            .fillMaxWidth()
+            .padding(start = 12.dp),
+        contentAlignment = Alignment.Start,
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = 320.dp)
+                .background(
                 MaterialTheme.colorScheme.surfaceVariant,
                 RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp),
             )

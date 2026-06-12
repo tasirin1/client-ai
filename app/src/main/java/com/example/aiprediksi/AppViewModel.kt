@@ -22,6 +22,9 @@ import com.example.aiprediksi.data.setProviderConfig
 import com.example.aiprediksi.data.getAllProviderNames
 import com.example.aiprediksi.network.ApiResult
 import com.example.aiprediksi.network.GenericApiClient
+import com.example.aiprediksi.data.applyProviderConfig
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import org.json.JSONObject
 import org.json.JSONArray
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -111,17 +114,17 @@ class AppViewModel(
     val uiState: StateFlow<UiState> = combine(
         prefsFlow,
         filteredSessionsFlow,
-        messagesFlow,
-        loading,
-        errorMessage,
-        connectionStatus,
-        connectionError,
-        errorLog,
-        streamingText,
-        showAssetSelector,
-        showSettings,
-        showNewSessionDialog,
-    ) { prefs, sessions, messages, load, err, connStat, connErr, errLog, streamTxt, showAs, showSet, showNew ->
+        messagesFlow
+    ) { prefs, sessions, messages ->
+        val showAs = showAssetSelector.value
+        val showSet = showSettings.value
+        val showNew = showNewSessionDialog.value
+        val load = loading.value
+        val err = errorMessage.value
+        val connStat = connectionStatus.value
+        val connErr = connectionError.value
+        val errLog = errorLog.value
+        val streamTxt = streamingText.value
         val currentId = prefs.activeSessionId
         UiState(
             prefs = prefs,
@@ -142,9 +145,7 @@ class AppViewModel(
             showSettings = showSet,
             showNewSessionDialog = showNew,
         )
-    }.let { flow ->
-        kotlinx.coroutines.flow.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Lazily, UiState())
-    }
+    }.stateIn(viewModelScope, SharingStarted.Lazily, UiState())
 
     // ======================== SESSION MANAGEMENT ========================
 
