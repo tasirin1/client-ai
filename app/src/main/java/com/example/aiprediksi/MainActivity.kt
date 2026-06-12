@@ -256,11 +256,11 @@ fun DashboardScreen(appContainer: AppContainer) {
 
             // ===== ERROR LOG =====
             if (state.errorLog.isNotBlank()) {
-                var showLog by rememberSaveable { mutableStateOf(false) }
-                TextButton(onClick = { showLog = !showLog }) {
+                val showLogState = rememberSaveable { mutableStateOf(false) }
+                TextButton(onClick = { showLogState.value = !showLogState.value }) {
                     Text("Error Log (${state.errorLog.lines().size})", fontSize = 11.sp)
                 }
-                AnimatedVisibility(visible = showLog) {
+                AnimatedVisibility(visible = showLogState.value) {
                     Text(
                         state.errorLog, color = Color(0xFFFF6666), fontSize = 10.sp,
                         modifier = Modifier
@@ -486,8 +486,8 @@ private fun SettingsOverlay(vm: AppViewModel, state: UiState) {
     val modelState = rememberSaveable { mutableStateOf(state.prefs.model) }
     val temperatureState = rememberSaveable { mutableStateOf(state.prefs.temperature) }
     val maxTokensState = rememberSaveable { mutableStateOf(state.prefs.maxTokens.toString()) }
-    val showProviderDropdown = rememberSaveable { mutableStateOf(false) }
-    val showModelDropdown = rememberSaveable { mutableStateOf(false) }
+    val showProviderDropdownState = rememberSaveable { mutableStateOf(false) }
+    val showModelDropdownState = rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(state.prefs.apiProvider, state.prefs.apiKey, state.prefs.model) {
         selectedProviderState.value = state.prefs.apiProvider
@@ -531,22 +531,22 @@ private fun SettingsOverlay(vm: AppViewModel, state: UiState) {
                 Text("Provider AI", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Box {
                     OutlinedButton(
-                        onClick = { showProviderDropdown.value = true },
+                        onClick = { showProviderDropdownState.value = true },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
                     ) {
                         Text(selectedProviderState.value, maxLines = 1)
                     }
                     DropdownMenu(
-                        expanded = showProviderDropdown.value,
-                        onDismissRequest = { showProviderDropdown.value = false },
+                        expanded = showProviderDropdownState.value,
+                        onDismissRequest = { showProviderDropdownState.value = false },
                     ) {
                         providers.forEach { p ->
                             DropdownMenuItem(
                                 text = { Text(p) },
                                 onClick = {
                                     selectedProviderState.value = p
-                                    showProviderDropdown.value = false
+                                    showProviderDropdownState.value = false
                                     vm.selectProvider(p)
                                 },
                             )
@@ -557,22 +557,22 @@ private fun SettingsOverlay(vm: AppViewModel, state: UiState) {
                 Text("Model", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Box {
                     OutlinedButton(
-                        onClick = { showModelDropdown.value = true },
+                        onClick = { showModelDropdownState.value = true },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
                     ) {
                         Text(modelState.value.ifBlank { "Pilih model" }, maxLines = 1)
                     }
                     DropdownMenu(
-                        expanded = showModelDropdown.value,
-                        onDismissRequest = { showModelDropdown.value = false },
+                        expanded = showModelDropdownState.value,
+                        onDismissRequest = { showModelDropdownState.value = false },
                     ) {
                         getModelsForProvider(selectedProviderState.value).forEach { m ->
                             DropdownMenuItem(
                                 text = { Text(m) },
                                 onClick = {
                                     modelState.value = m
-                                    showModelDropdown.value = false
+                                    showModelDropdownState.value = false
                                     vm.updateSetting { it.copy(model = m) }
                                 },
                             )
