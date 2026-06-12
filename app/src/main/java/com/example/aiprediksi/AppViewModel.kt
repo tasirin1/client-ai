@@ -3,220 +3,447 @@ package com.example.aiprediksi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.aiprediksi.data.AnalysisResult
 import com.example.aiprediksi.data.AppPrefs
 import com.example.aiprediksi.data.AssetDatabase
+import com.example.aiprediksi.data.AssetInfo
 import com.example.aiprediksi.data.AssetType
 import com.example.aiprediksi.data.BackupManager
 import com.example.aiprediksi.data.ChatRepository
+import com.example.aiprediksi.data.ChartInterval
+import com.example.aiprediksi.data.MarketDataRepository
 import com.example.aiprediksi.data.MessageEntity
+import com.example.aiprediksi.data.OHLCV
+import com.example.aiprediksi.data.PredictionDirection
 import com.example.aiprediksi.data.ProviderConfig
+import com.example.aiprediksi.data.RiskLevel
 import com.example.aiprediksi.data.SessionEntity
 import com.example.aiprediksi.data.SettingsStore
+import com.example.aiprediksi.data.applyProviderConfig
 import com.example.aiprediksi.data.getApiType
 import com.example.aiprediksi.data.getDefaultBaseUrl
 import com.example.aiprediksi.data.getDefaultModel
-import com.example.aiprediksi.data.getProviderConfig
-import com.example.aiprediksi.data.getModelsForProvider
 import com.example.aiprediksi.data.getFallbackChain
-import com.example.aiprediksi.data.setProviderConfig
+import com.example.aiprediksi.data.getModelsForProvider
+import com.example.aiprediksi.data.getProviderConfig
 import com.example.aiprediksi.data.getAllProviderNames
+import com.example.aiprediksi.data.setProviderConfig
 import com.example.aiprediksi.network.ApiResult
 import com.example.aiprediksi.network.GenericApiClient
-import com.example.aiprediksi.data.applyProviderConfig
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.stateIn
-import org.json.JSONObject
-import org.json.JSONArray
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
 enum class ConnectionStatus { IDLE, TESTING, CONNECTED, FAILED }
 
-data class SessionPreview(
-    val session: SessionEntity,
-    val lastMessage: String? = null,
-    val lastMessageTime: Long? = null,
-)
-
 data class UiState(
     val prefs: AppPrefs = AppPrefs(),
-    val sessions: List<SessionPreview> = emptyList(),
-    val groupedSessions: Map<String, List<SessionPreview>> = emptyMap(),
-    val messages: List<MessageEntity> = emptyList(),
-    val currentSessionId: String = "",
-    val isLoading: Boolean = false,
+    val selectedAsset: AssetInfo = AssetDatabase.cryptoAssets.first(),
+    val interval: ChartInterval = ChartInterval.H1,
+    val candles: List<OHLCV> = emptyList(),
+    val isLoadingData: Boolean = false,
+    val dataError: String = "",
+    val changePercent: Double = 0.0,
+    val rsi: Double = 50.0,
+    val supports: List<Double> = emptyList(),
+    val resistances: List<Double> = emptyList(),
+    val hoveredCandle: OHLCV? = null,
+    // AI
+    val isAnalyzing: Boolean = false,
+    val analysisResult: AnalysisResult? = null,
+    val streamingAnalysis: String = "",
     val errorMessage: String = "",
-    val sessionSearchQuery: String = "",
-    val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
-    val connectionError: String = "",
     val errorLog: String = "",
-    val streamingText: String = "",
-    val selectedAssetType: AssetType = AssetType.CRYPTO,
-    val favoriteAssets: List<String> = emptyList(),
-    val currentTimeframe: String = "24h",
-    val showAssetSelector: Boolean = false,
+    // Settings
     val showSettings: Boolean = false,
-    val showNewSessionDialog: Boolean = false,
+    val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
 )
 
 class AppViewModel(
     private val settingsStore: SettingsStore,
-    private val chatRepository: ChatRepository,
+    private val marketDataRepo: MarketDataRepository,
     private val apiClient: GenericApiClient,
     private val backupManager: BackupManager,
 ) : ViewModel() {
 
-    private val loading = MutableStateFlow(false)
+    private val selectedAsset = MutableStateFlow(AssetDatabase.cryptoAssets.first())
+    private val interval = MutableStateFlow(ChartInterval.H1)
+    private val candles = MutableStateFlow<List<OHLCV>>(emptyList())
+    private val isLoadingData = MutableStateFlow(false)
+    private val dataError = MutableStateFlow("")
+    private val changePercent = MutableStateFlow(0.0)
+    private val rsi = MutableStateFlow(50.0)
+    private val supports = MutableStateFlow<List<Double>>(emptyList())
+    private val resistances = MutableStateFlow<List<Double>>(emptyList())
+    private val hoveredCandle = MutableStateFlow<OHLCV?>(null)
+    private val isAnalyzing = MutableStateFlow(false)
+    private val analysisResult = MutableStateFlow<AnalysisResult?>(null)
+    private val streamingAnalysis = MutableStateFlow("")
     private val errorMessage = MutableStateFlow("")
-    private val searchQuery = MutableStateFlow("")
-    private val connectionStatus = MutableStateFlow(ConnectionStatus.IDLE)
-    private val connectionError = MutableStateFlow("")
     private val errorLog = MutableStateFlow("")
-    private val streamingText = MutableStateFlow("")
-    private val showAssetSelector = MutableStateFlow(false)
     private val showSettings = MutableStateFlow(false)
-    private val showNewSessionDialog = MutableStateFlow(false)
+    private val connectionStatus = MutableStateFlow(ConnectionStatus.IDLE)
 
     private val prefsFlow = settingsStore.prefsFlow
-    private val sessionsFlow = chatRepository.observeSessions()
-    private val lastMessagesFlow = chatRepository.observeLastMessagesForAllSessions()
 
-    private val sessionPreviewsFlow = combine(sessionsFlow, lastMessagesFlow) { sessions, lastMessages ->
-        val msgMap = lastMessages.associateBy { it.sessionId }
-        sessions.map { session ->
-            val lastMsg = msgMap[session.id]
-            SessionPreview(
-                session = session,
-                lastMessage = lastMsg?.let { truncatePreview(it.content) },
-                lastMessageTime = lastMsg?.createdAt,
-            )
-        }
-    }
-
-    private val filteredSessionsFlow = combine(sessionPreviewsFlow, searchQuery) { previews, query ->
-        if (query.isBlank()) previews
-        else previews.filter { it.session.title.contains(query, ignoreCase = true) }
-    }
-
-    private val currentSessionIdFlow = prefsFlow.map { it.activeSessionId }
-    private val messagesFlow = prefsFlow.flatMapLatest { prefs ->
-        val sessionId = prefs.activeSessionId
-        if (sessionId.isBlank()) kotlinx.coroutines.flow.flowOf(emptyList())
-        else chatRepository.observeMessages(sessionId)
-    }
-
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<UiState> = combine(
         prefsFlow,
-        filteredSessionsFlow,
-        messagesFlow
-    ) { prefs, sessions, messages ->
-        val showAs = showAssetSelector.value
-        val showSet = showSettings.value
-        val showNew = showNewSessionDialog.value
-        val load = loading.value
-        val err = errorMessage.value
-        val connStat = connectionStatus.value
-        val connErr = connectionError.value
-        val errLog = errorLog.value
-        val streamTxt = streamingText.value
-        val currentId = prefs.activeSessionId
+        selectedAsset,
+        interval,
+        candles,
+        isLoadingData,
+        dataError,
+        changePercent,
+        rsi,
+        supports,
+        resistances,
+        hoveredCandle,
+        isAnalyzing,
+        analysisResult,
+        streamingAnalysis,
+        errorMessage,
+        errorLog,
+        showSettings,
+        connectionStatus,
+    ) { prefs, asset, intv, cndls, loading, err, chg, r, sup, res, hov, analyzing, result, stream, errMsg, errLog, sett, conn ->
         UiState(
             prefs = prefs,
-            sessions = sessions,
-            groupedSessions = groupSessionsByDate(sessions),
-            messages = messages,
-            currentSessionId = currentId,
-            isLoading = load,
-            errorMessage = err,
-            connectionStatus = connStat,
-            connectionError = connErr,
+            selectedAsset = asset,
+            interval = intv,
+            candles = cndls,
+            isLoadingData = loading,
+            dataError = err,
+            changePercent = chg,
+            rsi = r,
+            supports = sup,
+            resistances = res,
+            hoveredCandle = hov,
+            isAnalyzing = analyzing,
+            analysisResult = result,
+            streamingAnalysis = stream,
+            errorMessage = errMsg,
             errorLog = errLog,
-            streamingText = streamTxt,
-            selectedAssetType = try { AssetType.valueOf(prefs.selectedAssetType) } catch (_: Exception) { AssetType.CRYPTO },
-            favoriteAssets = parseFavorites(prefs.favoriteAssets),
-            currentTimeframe = prefs.defaultTimeframe,
-            showAssetSelector = showAs,
-            showSettings = showSet,
-            showNewSessionDialog = showNew,
+            showSettings = sett,
+            connectionStatus = conn,
         )
     }.stateIn(viewModelScope, SharingStarted.Lazily, UiState())
 
-    // ======================== SESSION MANAGEMENT ========================
-
-    fun selectSession(sessionId: String) {
-        viewModelScope.launch {
-            settingsStore.update { it.copy(activeSessionId = sessionId) }
-        }
+    init {
+        // Load default asset on start
+        selectAsset(AssetDatabase.cryptoAssets.first())
     }
 
-    fun createNewSession() {
-        viewModelScope.launch {
-            val session = chatRepository.createSession("Prediksi baru")
-            settingsStore.update { it.copy(activeSessionId = session.id) }
-            showNewSessionDialog.value = false
-        }
+    // ======================== ASSET & INTERVAL ========================
+
+    fun selectAsset(asset: AssetInfo) {
+        selectedAsset.value = asset
+        analysisResult.value = null
+        streamingAnalysis.value = ""
+        errorMessage.value = ""
+        fetchMarketData()
     }
 
-    fun deleteSession(sessionId: String) {
-        viewModelScope.launch {
-            chatRepository.deleteSession(sessionId)
-            val prefs = settingsStore.prefsFlow.first()
-            if (prefs.activeSessionId == sessionId) {
-                settingsStore.update { it.copy(activeSessionId = "") }
-            }
-        }
+    fun selectInterval(chartInterval: ChartInterval) {
+        interval.value = chartInterval
+        analysisResult.value = null
+        fetchMarketData()
     }
 
-    fun updateSearchQuery(query: String) { searchQuery.value = query }
+    fun setHoveredCandle(c: OHLCV?) { hoveredCandle.value = c }
 
-    // ======================== SETTINGS ========================
+    fun toggleSettings() { showSettings.value = !showSettings.value }
 
     fun updateSetting(transform: (AppPrefs) -> AppPrefs) {
         viewModelScope.launch { settingsStore.update(transform) }
     }
 
-    fun toggleSettings() { showSettings.value = !showSettings.value }
-    fun toggleAssetSelector() { showAssetSelector.value = !showAssetSelector.value }
-    fun toggleNewSessionDialog() { showNewSessionDialog.value = !showNewSessionDialog.value }
+    // ======================== MARKET DATA ========================
 
-    fun setAssetType(type: AssetType) {
+    fun fetchMarketData() {
+        val asset = selectedAsset.value
+        val intv = interval.value
         viewModelScope.launch {
-            settingsStore.update { it.copy(selectedAssetType = type.name) }
+            isLoadingData.value = true
+            dataError.value = ""
+
+            val symbol = marketDataRepo.getBinanceSymbol(asset)
+            val result = marketDataRepo.fetchBinanceKlines(symbol, intv.binanceValue, 100)
+
+            result.onSuccess { klines ->
+                candles.value = klines
+                changePercent.value = marketDataRepo.calculateChange(klines)
+                rsi.value = marketDataRepo.calculateRSI(klines)
+                val (sup, res) = marketDataRepo.findSupportResistance(klines)
+                supports.value = sup
+                resistances.value = res
+                dataError.value = ""
+                // Connect status
+                connectionStatus.value = ConnectionStatus.CONNECTED
+            }.onFailure { e ->
+                dataError.value = "Gagal ambil data: ${e.message}"
+                connectionStatus.value = ConnectionStatus.FAILED
+            }
+            isLoadingData.value = false
         }
     }
 
-    fun setTimeframe(timeframe: String) {
-        viewModelScope.launch {
-            settingsStore.update { it.copy(defaultTimeframe = timeframe) }
-        }
-    }
+    // ======================== AI PREDIKSI ========================
 
-    fun toggleFavoriteAsset(symbol: String) {
+    fun analyzeChart() {
+        val asset = selectedAsset.value
+        val cndls = candles.value
+        if (cndls.isEmpty()) {
+            errorMessage.value = "Tidak ada data chart. Pilih aset dulu."
+            return
+        }
+
         viewModelScope.launch {
+            isAnalyzing.value = true
+            streamingAnalysis.value = ""
+            analysisResult.value = null
+            errorMessage.value = ""
+            appendLog("Memulai analisis untuk ${asset.symbol}...")
+
+            // Build market context
+            val marketContext = buildMarketContext(asset, cndls)
+            val systemPrompt = buildAnalysisPrompt(asset, marketContext)
+
+            // Try primary provider
             val prefs = settingsStore.prefsFlow.first()
-            val current = parseFavorites(prefs.favoriteAssets)
-            val updated = if (symbol in current) current - symbol else current + symbol
-            settingsStore.update { it.copy(favoriteAssets = JSONArray(updated).toString()) }
-        }
-    }
+            val provider = prefs.apiProvider
+            val config = getProviderConfig(prefs, provider)
+            val model = config.model.ifBlank { prefs.model }
+            val apiKey = config.apiKey.ifBlank { prefs.apiKey }
+            val baseUrl = config.baseUrl.ifBlank { prefs.baseUrl }
 
-    fun updateProviderConfig(provider: String, config: ProviderConfig) {
-        viewModelScope.launch {
-            val prefs = settingsStore.prefsFlow.first()
-            val newConfigs = setProviderConfig(prefs, provider, config)
-            settingsStore.update {
-                it.copy(providerConfigs = newConfigs).let { p ->
-                    if (p.apiProvider == provider) applyProviderConfig(p, config) else p
+            var success = false
+            if (apiKey.isNotBlank()) {
+                success = tryAnalyzeWithProvider(
+                    provider = provider,
+                    model = model,
+                    baseUrl = baseUrl,
+                    apiKey = apiKey,
+                    temperature = config.temperature.ifNaN { prefs.temperature },
+                    systemPrompt = systemPrompt,
+                )
+            }
+
+            if (!success) {
+                // Fallback chain
+                appendLog("Provider utama gagal, coba fallback...")
+                val fallbackProviders = getAllProviderNames()
+                    .filter { it != provider && it != "Custom" }
+                    .mapNotNull { p ->
+                        val cfg = getProviderConfig(prefs, p)
+                        if (cfg.apiKey.isNotBlank()) Triple(p, cfg.model.ifBlank { getDefaultModel(p) }, cfg.apiKey) else null
+                    }
+
+                for ((fbProvider, fbModel, fbKey) in fallbackProviders) {
+                    appendLog("Mencoba fallback: $fbProvider / $fbModel")
+                    success = tryAnalyzeWithProvider(
+                        provider = fbProvider,
+                        model = fbModel,
+                        baseUrl = getDefaultBaseUrl(fbProvider),
+                        apiKey = fbKey,
+                        temperature = 0.3f,
+                        systemPrompt = systemPrompt,
+                    )
+                    if (success) {
+                        appendLog("✅ Fallback berhasil: $fbProvider")
+                        break
+                    }
                 }
             }
+
+            if (!success) {
+                errorMessage.value = "Semua provider gagal. Periksa API key."
+                appendLog("❌ Semua gagal")
+            }
+
+            isAnalyzing.value = false
         }
     }
+
+    private suspend fun tryAnalyzeWithProvider(
+        provider: String,
+        model: String,
+        baseUrl: String,
+        apiKey: String,
+        temperature: Float,
+        systemPrompt: String,
+    ): Boolean {
+        return try {
+            val headers = "Content-Type: application/json\nAuthorization: Bearer $apiKey\nAccept: application/json"
+            val messages = JSONArray().apply {
+                put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
+            }
+            val body = JSONObject().apply {
+                put("model", model)
+                put("messages", messages)
+                put("temperature", temperature.toDouble())
+                put("max_tokens", 2048)
+                put("stream", true)
+            }.toString()
+
+            var fullText = ""
+            var lastError = ""
+
+            apiClient.executeStreaming(
+                url = baseUrl,
+                method = "POST",
+                headersText = headers,
+                body = body,
+                onToken = { token ->
+                    fullText += token
+                    streamingAnalysis.value = fullText
+                },
+                onDone = {
+                    if (fullText.isNotBlank()) {
+                        val result = parseAnalysisResult(fullText, selectedAsset.value.symbol)
+                        analysisResult.value = result
+                        appendLog("✅ Analisis selesai dari $provider")
+                    }
+                },
+                onError = { err -> lastError = err },
+            )
+
+            if (fullText.isNotBlank()) true
+            else {
+                appendLog("❌ $provider: $lastError")
+                false
+            }
+        } catch (e: Exception) {
+            appendLog("❌ $provider error: ${e.message}")
+            false
+        }
+    }
+
+    // ======================== BUILD CONTEXT ========================
+
+    private fun buildMarketContext(asset: AssetInfo, cndls: List<OHLCV>): String {
+        if (cndls.isEmpty()) return "Tidak ada data."
+        val last = cndls.last()
+        val prev = if (cndls.size > 1) cndls[cndls.size - 2] else last
+        val change = if (prev.close != 0.0) ((last.close - prev.close) / prev.close * 100) else 0.0
+        val high24 = cndls.maxOf { it.high }
+        val low24 = cndls.minOf { it.low }
+        val avgVol = cndls.map { it.volume }.average()
+        val rsiVal = marketDataRepo.calculateRSI(cndls)
+        val sma20 = marketDataRepo.calculateSMA(cndls, 20)
+        val sma50 = marketDataRepo.calculateSMA(cndls, 50)
+        val (supps, ress) = marketDataRepo.findSupportResistance(cndls)
+
+        return buildString {
+            appendLine("Aset: ${asset.name} (${asset.symbol})")
+            appendLine("Tipe: ${asset.type.label}")
+            appendLine("Timeframe: ${interval.value.label}")
+            appendLine("Jumlah candle: ${cndls.size}")
+            appendLine()
+            appendLine("Data Harga Terkini:")
+            appendLine("- Harga Terakhir: ${fmt(last.close)}")
+            appendLine("- Open: ${fmt(last.open)}")
+            appendLine("- High: ${fmt(last.high)}")
+            appendLine("- Low: ${fmt(last.low)}")
+            appendLine("- Perubahan: ${"%.2f".format(change)}%")
+            appendLine("- Volume: ${fmtVol(last.volume)}")
+            appendLine()
+            appendLine("Statistik Periode:")
+            appendLine("- Tertinggi: ${fmt(high24)}")
+            appendLine("- Terendah: ${fmt(low24)}")
+            appendLine("- Rata-rata Volume: ${fmtVol(avgVol)}")
+            appendLine()
+            appendLine("Indikator Teknikal:")
+            appendLine("- RSI(14): ${"%.1f".format(rsiVal)} ${rsiInterpretation(rsiVal)}")
+            if (sma20.isNotEmpty()) appendLine("- SMA 20: ${fmt(sma20.last())}")
+            if (sma50.isNotEmpty()) appendLine("- SMA 50: ${fmt(sma50.last())}")
+            if (sma20.isNotEmpty() && sma50.isNotEmpty()) {
+                val goldenCross = sma20.last() > sma50.last()
+                appendLine(if (goldenCross) "- Golden Cross (SMA20 > SMA50) 🟢" else "- Death Cross (SMA20 < SMA50) 🔴")
+            }
+            appendLine()
+            appendLine("Level Support & Resistance:")
+            supps.forEachIndexed { i, s -> appendLine("  Support ${i + 1}: ${fmt(s)}") }
+            ress.forEachIndexed { i, r -> appendLine("  Resistance ${i + 1}: ${fmt(r)}") }
+        }
+    }
+
+    private fun buildAnalysisPrompt(asset: AssetInfo, marketContext: String): String {
+        return buildString {
+            appendLine("Kamu adalah analis pasar profesional dan akurat.")
+            appendLine()
+            appendLine("Analisis data market berikut dan berikan prediksi:")
+            appendLine()
+            appendLine(marketContext)
+            appendLine()
+            appendLine("""
+Berikan analisis dalam format berikut (BAHASA INDONESIA):
+
+📊 ANALISIS [NAMA ASET]
+========================
+
+🟢/🔴/⚪ ARAH: [Bullish/Bearish/Netral]
+🎯 TARGET: [harga target]
+🛑 STOP LOSS: [harga stop loss]
+📈 KEYAKINAN: [persentase]%
+
+ANALISIS TEKNIKAL:
+- [poin analisis teknikal]
+
+ANALISIS FUNDAMENTAL:
+- [poin analisis fundamental]
+
+LEVEL PENTING:
+- Support: [level]
+- Resistance: [level]
+
+REKOMENDASI:
+- [saran spesifik]
+
+RISIKO: [Rendah/Sedang/Tinggi]
+
+⚠️ Disclaimer: Ini bukan saran keuangan.
+            """.trimIndent())
+        }
+    }
+
+    private fun parseAnalysisResult(text: String, symbol: String): AnalysisResult {
+        val direction = when {
+            text.contains("🟢") || text.contains("Bullish", ignoreCase = true) -> PredictionDirection.BULLISH
+            text.contains("🔴") || text.contains("Bearish", ignoreCase = true) -> PredictionDirection.BEARISH
+            else -> PredictionDirection.NEUTRAL
+        }
+        val confidence = extractPercent(text, "KEYAKINAN") ?: 50f
+        val target = extractPrice(text, "TARGET")
+        val stopLoss = extractPrice(text, "STOP LOSS")
+        val risk = when {
+            text.contains("Tinggi", ignoreCase = true) -> RiskLevel.HIGH
+            text.contains("Rendah", ignoreCase = true) -> RiskLevel.LOW
+            else -> RiskLevel.MEDIUM
+        }
+        val supportLevels = extractLevels(text, "Support")
+        val resistanceLevels = extractLevels(text, "Resistance")
+
+        return AnalysisResult(
+            symbol = symbol,
+            direction = direction,
+            confidence = confidence,
+            targetPrice = target,
+            stopLoss = stopLoss,
+            reasoning = text,
+            riskLevel = risk,
+            supportLevels = supportLevels,
+            resistanceLevels = resistanceLevels,
+        )
+    }
+
+    // ======================== PROVIDER CONFIG ========================
 
     fun selectProvider(provider: String) {
         viewModelScope.launch {
@@ -235,317 +462,26 @@ class AppViewModel(
         }
     }
 
-    // ======================== AUTO-FALLBACK & PREDIKSI ========================
-
-    /**
-     * Kirim prompt prediksi dengan auto-fallback chain.
-     * Jika provider utama gagal (token habis / error), coba provider lain.
-     */
-    fun sendPrediction(input: String, assetType: AssetType = AssetType.CRYPTO) {
-        if (input.isBlank()) return
+    fun updateProviderConfig(provider: String, config: ProviderConfig) {
         viewModelScope.launch {
             val prefs = settingsStore.prefsFlow.first()
-            val sessionId = prefs.activeSessionId
-            if (sessionId.isBlank()) {
-                val session = chatRepository.createSession(input.take(28))
-                settingsStore.update { it.copy(activeSessionId = session.id) }
-            }
-
-            // Simpan pesan user
-            val sid = settingsStore.prefsFlow.first().activeSessionId
-            chatRepository.addMessage(sid, "user", input, assetType = assetType.name)
-
-            // Auto-rename jika masih default
-            val session = chatRepository.getSessionOnce(sid)
-            if (session?.title == "Prediksi baru") {
-                chatRepository.renameSession(sid, input.take(28).trim().ifBlank { "Prediksi" })
-            }
-
-            loading.value = true
-            streamingText.value = ""
-            errorMessage.value = ""
-
-            val provider = prefs.apiProvider
-            val config = getProviderConfig(prefs, provider)
-            val model = config.model.ifBlank { prefs.model }
-
-            // Prompt prediksi dengan konteks
-            val systemPrompt = buildPredictionPrompt(assetType, input)
-
-            // Coba provider utama dulu
-            val success = trySendWithProvider(
-                sessionId = sid,
-                input = input,
-                provider = provider,
-                model = model,
-                baseUrl = config.baseUrl.ifBlank { prefs.baseUrl },
-                apiKey = config.apiKey.ifBlank { prefs.apiKey },
-                temperature = config.temperature.ifNaN(prefs.temperature),
-                maxTokens = config.maxTokens.ifZero(prefs.maxTokens),
-                systemPrompt = systemPrompt,
-                assetType = assetType,
-            )
-
-            if (!success) {
-                // Auto-fallback: coba provider lain
-                val fallbackSuccess = tryFallbackChain(sid, input, systemPrompt, assetType)
-                if (!fallbackSuccess) {
-                    errorMessage.value = "Semua provider gagal. Periksa koneksi dan API key."
+            val newConfigs = setProviderConfig(prefs, provider, config)
+            settingsStore.update {
+                it.copy(providerConfigs = newConfigs).let { p ->
+                    if (p.apiProvider == provider) applyProviderConfig(p, config) else p
                 }
             }
-
-            loading.value = false
-            streamingText.value = ""
         }
-    }
-
-    private suspend fun trySendWithProvider(
-        sessionId: String,
-        input: String,
-        provider: String,
-        model: String,
-        baseUrl: String,
-        apiKey: String,
-        temperature: Float,
-        maxTokens: Int,
-        systemPrompt: String,
-        assetType: AssetType,
-    ): Boolean {
-        return try {
-            if (apiKey.isBlank()) return false
-
-            val history = chatRepository.getMessagesOnce(sessionId)
-            val (requestUrl, headers, body) = buildOpenAIRequest(
-                baseUrl = baseUrl,
-                apiKey = apiKey,
-                model = model,
-                systemPrompt = systemPrompt,
-                messages = history,
-                temperature = temperature,
-                maxTokens = maxTokens,
-            )
-
-            appendErrorLog("Mencoba $provider / $model")
-
-            var accumulatedText = ""
-            var lastError = ""
-
-            apiClient.executeStreaming(
-                url = requestUrl,
-                method = "POST",
-                headersText = headers,
-                body = body,
-                onToken = { token ->
-                    accumulatedText += token
-                    streamingText.value = accumulatedText
-                },
-                onDone = {
-                    if (accumulatedText.isNotBlank()) {
-                        viewModelScope.launch {
-                            chatRepository.addMessage(
-                                sessionId, "assistant", accumulatedText,
-                                assetType = assetType.name,
-                            )
-                            appendErrorLog("✅ Berhasil: $provider / $model")
-                        }
-                    }
-                },
-                onError = { err -> lastError = err },
-            )
-
-            if (accumulatedText.isNotBlank()) true
-            else {
-                appendErrorLog("❌ $provider / $model gagal: $lastError")
-                false
-            }
-        } catch (e: Exception) {
-            appendErrorLog("❌ $provider / $model error: ${e.message}")
-            false
-        }
-    }
-
-    /**
-     * Fallback chain: coba provider lain saat provider utama gagal.
-     */
-    private suspend fun tryFallbackChain(
-        sessionId: String,
-        input: String,
-        systemPrompt: String,
-        assetType: AssetType,
-    ): Boolean {
-        val prefs = settingsStore.prefsFlow.first()
-
-        // Dapatkan daftar provider dari konfigurasi yang punya API key
-        val fallbackProviders = getAllProviderNames()
-            .filter { it != prefs.apiProvider && it != "Custom" }
-            .mapNotNull { providerName ->
-                val config = getProviderConfig(prefs, providerName)
-                if (config.apiKey.isNotBlank()) {
-                    val models = getModelsForProvider(providerName)
-                    val modelToUse = if (models.isNotEmpty()) models.first() else ""
-                    Triple(providerName, modelToUse, config)
-                } else null
-            }
-
-        for ((providerName, model, config) in fallbackProviders) {
-            val success = trySendWithProvider(
-                sessionId = sessionId,
-                input = input,
-                provider = providerName,
-                model = model.ifBlank { config.model.ifBlank { getDefaultModel(providerName) } },
-                baseUrl = config.baseUrl.ifBlank { getDefaultBaseUrl(providerName) },
-                apiKey = config.apiKey,
-                temperature = config.temperature.ifNaN(prefs.temperature),
-                maxTokens = config.maxTokens.ifZero(prefs.maxTokens),
-                systemPrompt = systemPrompt,
-                assetType = assetType,
-            )
-            if (success) return true
-        }
-        return false
-    }
-
-    // ======================== BUILD REQUEST ========================
-
-    private fun buildOpenAIRequest(
-        baseUrl: String,
-        apiKey: String,
-        model: String,
-        systemPrompt: String,
-        messages: List<MessageEntity>,
-        temperature: Float,
-        maxTokens: Int,
-    ): Triple<String, String, String> {
-        val url = baseUrl.trim()
-        val headers = buildString {
-            append("Content-Type: application/json\n")
-            append("Authorization: Bearer $apiKey\n")
-            append("Accept: application/json")
-        }
-
-        val historyMessages = JSONArray()
-        historyMessages.put(JSONObject().apply {
-            put("role", "system")
-            put("content", systemPrompt)
-        })
-
-        // Ambil 20 pesan terakhir untuk konteks
-        val recentMessages = messages.takeLast(20)
-        for (msg in recentMessages) {
-            historyMessages.put(JSONObject().apply {
-                put("role", msg.role)
-                put("content", msg.content)
-            })
-        }
-
-        val body = JSONObject().apply {
-            put("model", model)
-            put("messages", historyMessages)
-            put("temperature", temperature.toDouble())
-            put("max_tokens", maxTokens)
-            put("stream", true)
-        }.toString()
-
-        return Triple(url, headers, body)
-    }
-
-    private fun buildPredictionPrompt(assetType: AssetType, input: String): String {
-        val assetLabel = assetType.label
-        val timeframe = "24 jam"
-        return buildString {
-            appendLine("Kamu adalah analis $assetLabel profesional dan akurat.")
-            appendLine()
-            appendLine("Tugas:")
-            appendLine("- Analisis $assetLabel: $input")
-            appendLine("- Berikan prediksi arah harga (bullish/bearish/netral)")
-            appendLine("- Sertakan level support dan resistance")
-            appendLine("- Target waktu: $timeframe ke depan")
-            appendLine("- Berikan analisis teknikal dan fundamental singkat")
-            appendLine("- Sertakan level stop-loss yang disarankan")
-            appendLine("- Tingkat keyakinan (0-100%)")
-            appendLine()
-            appendLine("Format jawaban:")
-            appendLine("📊 **Analisis [Nama Aset]**")
-            appendLine("🟢/🔴/⚪ **Arah: [Bullish/Bearish/Netral]**")
-            appendLine("🎯 **Target:** [harga target]")
-            appendLine("🛑 **Stop Loss:** [harga stop loss]")
-            appendLine("📈 **Keyakinan:** [persentase]%")
-            appendLine()
-            appendLine("**Analisis Teknikal:**")
-            appendLine("- Poin-poin analisis...")
-            appendLine()
-            appendLine("**Analisis Fundamental:**")
-            appendLine("- Poin-poin analisis...")
-            appendLine()
-            appendLine("**Rekomendasi:**")
-            appendLine("- Saran trading...")
-            appendLine()
-            appendLine("⚠️ *Disclaimer: Ini bukan saran keuangan. Trading memiliki risiko tinggi.*")
-        }
-    }
-
-    // ======================== PROVIDER CONFIG HELPERS ========================
-
-    fun getModelsForCurrentProvider(provider: String): List<String> {
-        val defaultModels = getModelsForProvider(provider)
-        return defaultModels
-    }
-
-    fun addCustomModel(model: String) {
-        viewModelScope.launch {
-            val prefs = settingsStore.prefsFlow.first()
-            val provider = prefs.apiProvider
-            val config = getProviderConfig(prefs, provider)
-            val updated = config.copy(customModels = (config.customModels + model).distinct())
-            val newConfigs = setProviderConfig(prefs, provider, updated)
-            settingsStore.update { it.copy(providerConfigs = newConfigs) }
-        }
-    }
-
-    fun removeCustomModel(model: String) {
-        viewModelScope.launch {
-            val prefs = settingsStore.prefsFlow.first()
-            val provider = prefs.apiProvider
-            val config = getProviderConfig(prefs, provider)
-            val updated = config.copy(customModels = config.customModels - model)
-            val newConfigs = setProviderConfig(prefs, provider, updated)
-            settingsStore.update { it.copy(providerConfigs = newConfigs) }
-        }
-    }
-
-    // ======================== BACKUP ========================
-
-    fun createBackupJson(): String {
-        var result = "{}"
-        viewModelScope.launch {
-            val backup = backupManager.createBackup()
-            result = backupManager.serialize(backup)
-        }
-        return result
-    }
-
-    suspend fun restoreFromJson(json: String): Boolean {
-        val backup = backupManager.deserialize(json) ?: return false
-        return backupManager.restore(backup)
     }
 
     // ======================== HELPERS ========================
 
-    private fun appendErrorLog(msg: String) {
+    private fun appendLog(msg: String) {
         val current = errorLog.value
-        errorLog.value = if (current.length > 2000) {
-            current.takeLast(1500) + "\n$msg"
-        } else {
-            "$current\n$msg"
-        }
+        errorLog.value = if (current.length > 3000) current.takeLast(2500) + "\n$msg" else "$current\n$msg"
     }
 
-    private fun parseFavorites(json: String): List<String> {
-        return try {
-            val arr = JSONArray(json)
-            (0 until arr.length()).map { arr.optString(it, "") }.filter { it.isNotBlank() }
-        } catch (_: Exception) { emptyList() }
-    }
+    private fun Float.ifNaN(default: Float): Float = if (isNaN()) default else this
 
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory {
@@ -554,7 +490,7 @@ class AppViewModel(
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     return AppViewModel(
                         settingsStore = container.settingsStore,
-                        chatRepository = container.chatRepository,
+                        marketDataRepo = container.marketDataRepo,
                         apiClient = container.apiClient,
                         backupManager = container.backupManager,
                     ) as T
@@ -564,45 +500,39 @@ class AppViewModel(
     }
 }
 
-private fun truncatePreview(text: String): String {
-    return text.replace("\n", " ").replace("\r", " ").trim().take(120)
-        .let { if (it.length >= 120) "$it..." else it }
+// ======================== EXTENSION FUNCTIONS ========================
+
+private fun rsiInterpretation(rsi: Double): String = when {
+    rsi >= 70 -> "(Overbought/Jenuh Beli 🔴)"
+    rsi <= 30 -> "(Oversold/Jenuh Jual 🟢)"
+    else -> "(Normal)"
 }
 
-fun groupSessionsByDate(sessions: List<SessionPreview>): Map<String, List<SessionPreview>> {
-    if (sessions.isEmpty()) return emptyMap()
-    val now = java.util.Calendar.getInstance()
-    val todayStart = java.util.Calendar.getInstance().apply {
-        set(java.util.Calendar.HOUR_OF_DAY, 0)
-        set(java.util.Calendar.MINUTE, 0)
-        set(java.util.Calendar.SECOND, 0)
-        set(java.util.Calendar.MILLISECOND, 0)
-    }
-    val yesterdayStart = todayStart.clone() as java.util.Calendar
-    yesterdayStart.add(java.util.Calendar.DAY_OF_YEAR, -1)
-    val thisWeekStart = todayStart.clone() as java.util.Calendar
-    thisWeekStart.set(java.util.Calendar.DAY_OF_WEEK, thisWeekStart.getFirstDayOfWeek())
-    val thisMonthStart = todayStart.clone() as java.util.Calendar
-    thisMonthStart.set(java.util.Calendar.DAY_OF_MONTH, 1)
-    val groups = linkedMapOf<String, MutableList<SessionPreview>>()
-    groups["Hari Ini"] = mutableListOf()
-    groups["Kemarin"] = mutableListOf()
-    groups["7 Hari Terakhir"] = mutableListOf()
-    groups["Bulan Ini"] = mutableListOf()
-    groups["Sebelumnya"] = mutableListOf()
-    for (preview in sessions) {
-        val time = preview.session.updatedAt
-        val group = when {
-            time >= todayStart.timeInMillis -> "Hari Ini"
-            time >= yesterdayStart.timeInMillis -> "Kemarin"
-            time >= thisWeekStart.timeInMillis -> "7 Hari Terakhir"
-            time >= thisMonthStart.timeInMillis -> "Bulan Ini"
-            else -> "Sebelumnya"
-        }
-        groups[group]!!.add(preview)
-    }
-    return groups.filter { it.value.isNotEmpty() }
+private fun extractPercent(text: String, label: String): Float? {
+    val regex = Regex("""$label[:\s]*(\d{1,3})""", RegexOption.IGNORE_CASE)
+    return regex.find(text)?.groupValues?.getOrNull(1)?.toFloatOrNull()
 }
 
-private fun Float.ifNaN(default: Float): Float = if (isNaN()) default else this
-private fun Int.ifZero(default: Int): Int = if (this == 0) default else this
+private fun extractPrice(text: String, label: String): Double? {
+    val regex = Regex("""$label[:\s]*([\d,]+\.?\d*)""", RegexOption.IGNORE_CASE)
+    return regex.find(text)?.groupValues?.getOrNull(1)?.replace(",", "")?.toDoubleOrNull()
+}
+
+private fun extractLevels(text: String, label: String): List<Double> {
+    val regex = Regex("""$label[ \d]*[:\s]*([\d,]+\.?\d*)""", RegexOption.IGNORE_CASE)
+    return regex.findAll(text).mapNotNull {
+        it.groupValues.getOrNull(1)?.replace(",", "")?.toDoubleOrNull()
+    }.toList()
+}
+
+private fun fmt(p: Double): String = when {
+    p >= 1000 -> "%.2f".format(p)
+    p >= 1 -> "%.4f".format(p)
+    else -> "%.6f".format(p)
+}
+
+private fun fmtVol(v: Double): String = when {
+    v >= 1_000_000 -> "%.2fM".format(v / 1_000_000)
+    v >= 1_000 -> "%.2fK".format(v / 1_000)
+    else -> "%.2f".format(v)
+}

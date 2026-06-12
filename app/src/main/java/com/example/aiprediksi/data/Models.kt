@@ -15,6 +15,67 @@ enum class AssetType(val label: String, val symbol: String, val emoji: String) {
     ETF("ETF", "📋", "📋"),
 }
 
+// ===================== OHLCV / MARKET DATA =====================
+
+data class OHLCV(
+    val openTime: Long,
+    val open: Double,
+    val high: Double,
+    val low: Double,
+    val close: Double,
+    val volume: Double,
+    val closeTime: Long = 0,
+)
+
+data class MarketData(
+    val symbol: String,
+    val assetName: String,
+    val assetType: AssetType,
+    val timeframe: String,
+    val candles: List<OHLCV>,
+    val lastPrice: Double = 0.0,
+    val change24h: Double = 0.0,
+    val changePercent24h: Double = 0.0,
+    val high24h: Double = 0.0,
+    val low24h: Double = 0.0,
+    val volume24h: Double = 0.0,
+    val fetchedAt: Long = System.currentTimeMillis(),
+)
+
+data class CandleUpdate(
+    val symbol: String,
+    val timeframe: String,
+    val candles: List<OHLCV>,
+    val isLoading: Boolean = false,
+    val error: String = "",
+)
+
+enum class ChartInterval(val label: String, val binanceValue: String) {
+    M1("1m", "1m"),
+    M5("5m", "5m"),
+    M15("15m", "15m"),
+    M30("30m", "30m"),
+    H1("1h", "1h"),
+    H4("4h", "4h"),
+    H12("12h", "12h"),
+    D1("1d", "1d"),
+    W1("1w", "1w"),
+}
+
+data class AnalysisResult(
+    val symbol: String,
+    val direction: PredictionDirection,
+    val confidence: Float,
+    val entryPrice: Double? = null,
+    val targetPrice: Double? = null,
+    val stopLoss: Double? = null,
+    val reasoning: String = "",
+    val indicators: List<String> = emptyList(),
+    val supportLevels: List<Double> = emptyList(),
+    val resistanceLevels: List<Double> = emptyList(),
+    val riskLevel: RiskLevel = RiskLevel.MEDIUM,
+)
+
 data class AssetInfo(
     val name: String,
     val symbol: String,
