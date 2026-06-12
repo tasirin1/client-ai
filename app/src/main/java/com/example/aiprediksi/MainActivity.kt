@@ -294,7 +294,7 @@ private fun AssetSelectorBar(
     onAssetSelected: (AssetInfo) -> Unit,
 ) {
     val allAssets = remember { AssetDatabase.getAllAssets() }
-    var showDropdown by remember { mutableStateOf(false) }
+    val showDropdownState = remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
@@ -307,14 +307,14 @@ private fun AssetSelectorBar(
         // Current asset button
         Box {
             OutlinedButton(
-                onClick = { showDropdown = true },
+                onClick = { showDropdownState.value = true },
                 shape = RoundedCornerShape(8.dp),
             ) {
                 Text("${selectedAsset.symbol} — ${selectedAsset.name}", fontSize = 13.sp, maxLines = 1)
             }
             DropdownMenu(
-                expanded = showDropdown,
-                onDismissRequest = { showDropdown = false },
+                expanded = showDropdownState.value,
+                onDismissRequest = { showDropdownState.value = false },
                 modifier = Modifier.height(300.dp),
             ) {
                 AssetType.entries.forEach { type ->
@@ -333,7 +333,7 @@ private fun AssetSelectorBar(
                             },
                             onClick = {
                                 onAssetSelected(asset)
-                                showDropdown = false
+                                showDropdownState.value = false
                             },
                         )
                     }

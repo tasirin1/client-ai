@@ -34,7 +34,7 @@ fun CandlestickChart(
 ) {
     if (candles.isEmpty()) return
 
-    var crosshairIndex by remember { mutableStateOf(-1) }
+    val crosshairIndexState = remember { mutableStateOf(-1) }
 
     Canvas(
         modifier = modifier
@@ -45,17 +45,17 @@ fun CandlestickChart(
                     onDragStart = { offset ->
                         val candleW = size.width.toFloat() / candles.size
                         val idx = (offset.x / candleW).toInt().coerceIn(0, candles.size - 1)
-                        crosshairIndex = idx
+                        crosshairIndexState.value = idx
                         onCrosshairMove(candles.getOrNull(idx))
                     },
                     onDragEnd = {
-                        crosshairIndex = -1
+                        crosshairIndexState.value = -1
                         onCrosshairMove(null)
                     },
                     onHorizontalDrag = { change, _ ->
                         val candleW = size.width.toFloat() / candles.size
                         val idx = (change.position.x / candleW).toInt().coerceIn(0, candles.size - 1)
-                        crosshairIndex = idx
+                        crosshairIndexState.value = idx
                         onCrosshairMove(candles.getOrNull(idx))
                     },
                 )
@@ -122,7 +122,7 @@ fun CandlestickChart(
             drawRect(color, topLeft = Offset(x - halfBody, top), size = Size(bodyW, bodyH))
 
             // Crosshair
-            if (i == crosshairIndex) {
+            if (i == crosshairIndexState.value) {
                 drawLine(Color(0x44FFFFFF), Offset(x, padT), Offset(x, padT + chartH), strokeWidth = 1f)
                 drawCircle(color, 5f, Offset(x, cY))
                 drawContext.canvas.nativeCanvas.drawText(
