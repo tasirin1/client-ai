@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -114,6 +115,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(appContainer: AppContainer) {
     val vm: AppViewModel = viewModel(factory = AppViewModel.factory(appContainer))
@@ -240,6 +242,7 @@ fun MainScreen(appContainer: AppContainer) {
 
 // ======================== DRAWER ========================
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DrawerContent(vm: AppViewModel, state: UiState, onClose: () -> Unit) {
     val searchQuery = rememberSaveable { mutableStateOf("") }
@@ -380,6 +383,7 @@ private fun SessionItem(
 
 // ======================== TOP BAR ========================
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChatTopBar(
     title: String,
@@ -594,7 +598,7 @@ private fun StreamingBubble(text: String) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 12.dp),
-        contentAlignment = Alignment.Start,
+        contentAlignment = Alignment.TopStart,
     ) {
         Box(
             modifier = Modifier

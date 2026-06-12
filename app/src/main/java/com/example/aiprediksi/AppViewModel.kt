@@ -280,8 +280,8 @@ class AppViewModel(
                 model = model,
                 baseUrl = config.baseUrl.ifBlank { prefs.baseUrl },
                 apiKey = config.apiKey.ifBlank { prefs.apiKey },
-                temperature = config.temperature.ifNaN { prefs.temperature },
-                maxTokens = config.maxTokens.ifZero { prefs.maxTokens },
+                temperature = config.temperature.ifNaN(prefs.temperature),
+                maxTokens = config.maxTokens.ifZero(prefs.maxTokens),
                 systemPrompt = systemPrompt,
                 assetType = assetType,
             )
@@ -395,8 +395,8 @@ class AppViewModel(
                 model = model.ifBlank { config.model.ifBlank { getDefaultModel(providerName) } },
                 baseUrl = config.baseUrl.ifBlank { getDefaultBaseUrl(providerName) },
                 apiKey = config.apiKey,
-                temperature = config.temperature.ifNaN { prefs.temperature },
-                maxTokens = config.maxTokens.ifZero { prefs.maxTokens },
+                temperature = config.temperature.ifNaN(prefs.temperature),
+                maxTokens = config.maxTokens.ifZero(prefs.maxTokens),
                 systemPrompt = systemPrompt,
                 assetType = assetType,
             )
