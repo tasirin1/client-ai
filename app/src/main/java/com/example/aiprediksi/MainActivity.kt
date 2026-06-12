@@ -600,16 +600,17 @@ private fun StreamingBubble(text: String) {
             modifier = Modifier
                 .widthIn(max = 320.dp)
                 .background(
-                MaterialTheme.colorScheme.surfaceVariant,
-                RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp),
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp),
+                )
+                .padding(12.dp),
+        ) {
+            Text(
+                text = text + " ▌",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface,
             )
-            .padding(12.dp),
-    ) {
-        Text(
-            text = text + " ▌",
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+        }
     }
 }
 
