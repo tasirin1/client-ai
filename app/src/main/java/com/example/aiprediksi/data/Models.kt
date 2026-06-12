@@ -6,13 +6,13 @@ import androidx.room.PrimaryKey
 
 // ===================== ASET / PREDIKSI =====================
 
-enum class AssetType(val label: String, val symbol: String) {
-    CRYPTO("Crypto", "₿"),
-    STOCK("Saham", "📈"),
-    FOREX("Forex", "💱"),
-    COMMODITY("Komoditas", "🛢️"),
-    INDEX("Indeks", "📊"),
-    ETF("ETF", "📋"),
+enum class AssetType(val label: String, val symbol: String, val emoji: String) {
+    CRYPTO("Crypto", "₿", "₿"),
+    STOCK("Saham", "📈", "📈"),
+    FOREX("Forex", "💱", "💱"),
+    COMMODITY("Komoditas", "🛢️", "🛢️"),
+    INDEX("Indeks", "📊", "📊"),
+    ETF("ETF", "📋", "📋"),
 }
 
 data class AssetInfo(

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -562,7 +563,7 @@ private fun PredictionContent(text: String) {
                         text = "•  ${trimmed.removePrefix("- ")}",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(start = 8.dp, vertical = 1.dp),
+                        modifier = Modifier.padding(start = 8.dp, top = 1.dp, end = 8.dp, bottom = 1.dp),
                     )
                 }
                 trimmed.startsWith("⚠️") -> {
@@ -695,21 +696,21 @@ private fun ChatInput(
 @Composable
 private fun SettingsPanel(vm: AppViewModel, state: UiState) {
     val providers = remember { getAllProviderNames() }
-    var selectedProvider by rememberSaveable { mutableStateOf(state.prefs.apiProvider) }
-    var apiKey by rememberSaveable { mutableStateOf(state.prefs.apiKey) }
-    var model by rememberSaveable { mutableStateOf(state.prefs.model) }
-    var temperature by rememberSaveable { mutableStateOf(state.prefs.temperature) }
-    var maxTokens by rememberSaveable { mutableStateOf(state.prefs.maxTokens.toString()) }
-    var showProviderDropdown by rememberSaveable { mutableStateOf(false) }
-    var showModelDropdown by rememberSaveable { mutableStateOf(false) }
+    val selectedProviderState = rememberSaveable { mutableStateOf(state.prefs.apiProvider) }
+    val apiKeyState = rememberSaveable { mutableStateOf(state.prefs.apiKey) }
+    val modelState = rememberSaveable { mutableStateOf(state.prefs.model) }
+    val temperatureState = rememberSaveable { mutableStateOf(state.prefs.temperature) }
+    val maxTokensState = rememberSaveable { mutableStateOf(state.prefs.maxTokens.toString()) }
+    val showProviderDropdownState = rememberSaveable { mutableStateOf(false) }
+    val showModelDropdownState = rememberSaveable { mutableStateOf(false) }
 
     // Update local state when prefs change
     LaunchedEffect(state.prefs.apiProvider, state.prefs.apiKey, state.prefs.model) {
-        selectedProvider = state.prefs.apiProvider
-        apiKey = state.prefs.apiKey
-        model = state.prefs.model
-        temperature = state.prefs.temperature
-        maxTokens = state.prefs.maxTokens.toString()
+        selectedProviderState.value = state.prefs.apiProvider
+        apiKeyState.value = state.prefs.apiKey
+        modelState.value = state.prefs.model
+        temperatureState.value = state.prefs.temperature
+        maxTokensState.value = state.prefs.maxTokens.toString()
     }
 
     Card(
@@ -741,22 +742,22 @@ private fun SettingsPanel(vm: AppViewModel, state: UiState) {
             Text("Provider", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Box {
                 OutlinedButton(
-                    onClick = { showProviderDropdown = true },
+                    onClick = { showProviderDropdownState.value = true },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Text(selectedProvider, maxLines = 1)
+                    Text(selectedProviderState.value, maxLines = 1)
                 }
                 DropdownMenu(
-                    expanded = showProviderDropdown,
-                    onDismissRequest = { showProviderDropdown = false },
+                    expanded = showProviderDropdownState.value,
+                    onDismissRequest = { showProviderDropdownState.value = false },
                 ) {
                     providers.forEach { provider ->
                         DropdownMenuItem(
                             text = { Text(provider) },
                             onClick = {
-                                selectedProvider = provider
-                                showProviderDropdown = false
+                                selectedProviderState.value = provider
+                                showProviderDropdownState.value = false
                                 vm.selectProvider(provider)
                             },
                         )
@@ -768,22 +769,22 @@ private fun SettingsPanel(vm: AppViewModel, state: UiState) {
             Text("Model", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Box {
                 OutlinedButton(
-                    onClick = { showModelDropdown = true },
+                    onClick = { showModelDropdownState.value = true },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Text(model.ifBlank { "Pilih model" }, maxLines = 1)
+                    Text(modelState.value.ifBlank { "Pilih model" }, maxLines = 1)
                 }
                 DropdownMenu(
-                    expanded = showModelDropdown,
-                    onDismissRequest = { showModelDropdown = false },
+                    expanded = showModelDropdownState.value,
+                    onDismissRequest = { showModelDropdownState.value = false },
                 ) {
-                    getModelsForProvider(selectedProvider).forEach { m ->
+                    getModelsForProvider(selectedProviderState.value).forEach { m ->
                         DropdownMenuItem(
                             text = { Text(m) },
                             onClick = {
-                                model = m
-                                showModelDropdown = false
+                                modelState.value = m
+                                showModelDropdownState.value = false
                                 vm.updateSetting { it.copy(model = m) }
                             },
                         )
@@ -793,8 +794,8 @@ private fun SettingsPanel(vm: AppViewModel, state: UiState) {
 
             // API Key
             OutlinedTextField(
-                value = apiKey,
-                onValueChange = { apiKey = it },
+                value = apiKeyState.value,
+                onValueChange = { apiKeyState.value = it },
                 label = { Text("API Key", fontSize = 12.sp) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
@@ -803,10 +804,10 @@ private fun SettingsPanel(vm: AppViewModel, state: UiState) {
             )
 
             // Temperature
-            Text("Temperature: ${"%.1f".format(temperature)}", fontSize = 12.sp)
+            Text("Temperature: ${"%.1f".format(temperatureState.value)}", fontSize = 12.sp)
             Slider(
-                value = temperature,
-                onValueChange = { temperature = it },
+                value = temperatureState.value,
+                onValueChange = { temperatureState.value = it },
                 valueRange = 0f..1f,
                 steps = 9,
                 colors = SliderDefaults.colors(
@@ -817,8 +818,8 @@ private fun SettingsPanel(vm: AppViewModel, state: UiState) {
 
             // Max Tokens
             OutlinedTextField(
-                value = maxTokens,
-                onValueChange = { maxTokens = it.filter { c -> c.isDigit() } },
+                value = maxTokensState.value,
+                onValueChange = { maxTokensState.value = it.filter { c -> c.isDigit() } },
                 label = { Text("Max Tokens", fontSize = 12.sp) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
@@ -830,13 +831,13 @@ private fun SettingsPanel(vm: AppViewModel, state: UiState) {
             Button(
                 onClick = {
                     val config = ProviderConfig(
-                        apiKey = apiKey,
-                        model = model,
-                        baseUrl = getDefaultBaseUrl(selectedProvider),
-                        temperature = temperature,
-                        maxTokens = maxTokens.toIntOrNull() ?: 4096,
+                        apiKey = apiKeyState.value,
+                        model = modelState.value,
+                        baseUrl = getDefaultBaseUrl(selectedProviderState.value),
+                        temperature = temperatureState.value,
+                        maxTokens = maxTokensState.value.toIntOrNull() ?: 4096,
                     )
-                    vm.updateProviderConfig(selectedProvider, config)
+                    vm.updateProviderConfig(selectedProviderState.value, config)
                     vm.toggleSettings()
                 },
                 modifier = Modifier
