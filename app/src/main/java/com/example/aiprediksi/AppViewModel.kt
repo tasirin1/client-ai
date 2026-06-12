@@ -262,7 +262,7 @@ class AppViewModel(
             dataError.value = ""
 
             val symbol = marketDataRepo.getBinanceSymbol(asset)
-            val result = marketDataRepo.fetchBinanceKlines(symbol, intv.binanceValue, 100)
+            val result = marketDataRepo.fetchKlines(symbol, intv.binanceValue, 100)
 
             result.onSuccess { klines ->
                 candles.value = klines
