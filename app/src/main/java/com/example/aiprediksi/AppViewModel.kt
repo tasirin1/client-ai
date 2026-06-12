@@ -41,7 +41,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
-enum class ConnectionStatus { IDLE, TESTING, CONNECTED, FAILED)
+enum class ConnectionStatus { IDLE, TESTING, CONNECTED, FAILED }
 
 data class UiState(
     val prefs: AppPrefs = AppPrefs(),
@@ -121,12 +121,12 @@ class AppViewModel(
             showSettings = arr[16] as Boolean,
             connectionStatus = arr[17] as ConnectionStatus,
         )
-   ).stateIn(viewModelScope, SharingStarted.Lazily, UiState())
+    }.stateIn(viewModelScope, SharingStarted.Lazily, UiState())
 
     init {
         // Load default asset on start
         selectAsset(AssetDatabase.cryptoAssets.first())
-   )
+    }
 
     // ======================== ASSET & INTERVAL ========================
 
@@ -136,21 +136,21 @@ class AppViewModel(
         streamingAnalysis.value = ""
         errorMessage.value = ""
         fetchMarketData()
-   )
+    }
 
     fun selectInterval(chartInterval: ChartInterval) {
         interval.value = chartInterval
         analysisResult.value = null
         fetchMarketData()
-   )
+    }
 
-    fun setHoveredCandle(c: OHLCV?) { hoveredCandle.value = c)
+    fun setHoveredCandle(c: OHLCV?) { hoveredCandle.value = c }
 
-    fun toggleSettings() { showSettings.value = !showSettings.value)
+    fun toggleSettings() { showSettings.value = !showSettings.value }
 
     fun updateSetting(transform: (AppPrefs) -> AppPrefs) {
-        viewModelScope.launch { settingsStore.update(transform))
-   )
+        viewModelScope.launch { settingsStore.update(transform) }
+    }
 
     // ======================== MARKET DATA ========================
 
@@ -174,13 +174,13 @@ class AppViewModel(
                 dataError.value = ""
                 // Connect status
                 connectionStatus.value = ConnectionStatus.CONNECTED
-           ).onFailure { e ->
+            }.onFailure { e ->
                 dataError.value = "Gagal ambil data: ${e.message}"
                 connectionStatus.value = ConnectionStatus.FAILED
-           )
+            }
             isLoadingData.value = false
-       )
-   )
+        }
+    }
 
     // ======================== AI PREDIKSI ========================
 
@@ -190,7 +190,7 @@ class AppViewModel(
         if (cndls.isEmpty()) {
             errorMessage.value = "Tidak ada data chart. Pilih aset dulu."
             return
-       )
+        }
 
         viewModelScope.launch {
             isAnalyzing.value = true
@@ -207,9 +207,9 @@ class AppViewModel(
             val prefs = settingsStore.prefsFlow.first()
             val provider = prefs.apiProvider
             val config = getProviderConfig(prefs, provider)
-            val model = config.model.ifBlank { prefs.model)
-            val apiKey = config.apiKey.ifBlank { prefs.apiKey)
-            val baseUrl = config.baseUrl.ifBlank { prefs.baseUrl)
+            val model = config.model.ifBlank { prefs.model }
+            val apiKey = config.apiKey.ifBlank { prefs.apiKey }
+            val baseUrl = config.baseUrl.ifBlank { prefs.baseUrl }
 
             var success = false
             if (apiKey.isNotBlank()) {
@@ -218,20 +218,20 @@ class AppViewModel(
                     model = model,
                     baseUrl = baseUrl,
                     apiKey = apiKey,
-                    temperature = config.temperature.ifNaN( prefs.temperature),
+                    temperature = config.temperature.ifNaN(prefs.temperature),
                     systemPrompt = systemPrompt,
                 )
-           )
+            }
 
             if (!success) {
                 // Fallback chain
                 appendLog("Provider utama gagal, coba fallback...")
                 val fallbackProviders = getAllProviderNames()
-                    .filter { it != provider && it != "Custom")
+                    .filter { it != provider && it != "Custom" }
                     .mapNotNull { p ->
                         val cfg = getProviderConfig(prefs, p)
-                        if (cfg.apiKey.isNotBlank()) Triple(p, cfg.model.ifBlank { getDefaultModel(p)), cfg.apiKey) else null
-                   )
+                        if (cfg.apiKey.isNotBlank()) Triple(p, cfg.model.ifBlank { getDefaultModel(p) }, cfg.apiKey) else null
+                    }
 
                 for ((fbProvider, fbModel, fbKey) in fallbackProviders) {
                     appendLog("Mencoba fallback: $fbProvider / $fbModel")
@@ -246,18 +246,18 @@ class AppViewModel(
                     if (success) {
                         appendLog("✅ Fallback berhasil: $fbProvider")
                         break
-                   )
-               )
-           )
+                    }
+                }
+            }
 
             if (!success) {
                 errorMessage.value = "Semua provider gagal. Periksa API key."
                 appendLog("❌ Semua gagal")
-           )
+            }
 
             isAnalyzing.value = false
-       )
-   )
+        }
+    }
 
     private suspend fun tryAnalyzeWithProvider(
         provider: String,
@@ -270,15 +270,15 @@ class AppViewModel(
         return try {
             val headers = "Content-Type: application/json\nAuthorization: Bearer $apiKey\nAccept: application/json"
             val messages = JSONArray().apply {
-                put(JSONObject().apply { put("role", "system"); put("content", systemPrompt)))
-           )
+                put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
+            }
             val body = JSONObject().apply {
                 put("model", model)
                 put("messages", messages)
                 put("temperature", temperature.toDouble())
                 put("max_tokens", 2048)
                 put("stream", true)
-           ).toString()
+            }.toString()
 
             var fullText = ""
             var lastError = ""
@@ -291,27 +291,27 @@ class AppViewModel(
                 onToken = { token ->
                     fullText += token
                     streamingAnalysis.value = fullText
-               ),
+                },
                 onDone = {
                     if (fullText.isNotBlank()) {
                         val result = parseAnalysisResult(fullText, selectedAsset.value.symbol)
                         analysisResult.value = result
                         appendLog("✅ Analisis selesai dari $provider")
-                   )
-               ),
-                onError = { err -> lastError = err),
+                    }
+                },
+                onError = { err -> lastError = err },
             )
 
             if (fullText.isNotBlank()) true
             else {
                 appendLog("❌ $provider: $lastError")
                 false
-           )
-       ) catch (e: Exception) {
+            }
+        } catch (e: Exception) {
             appendLog("❌ $provider error: ${e.message}")
             false
-       )
-   )
+        }
+    }
 
     // ======================== BUILD CONTEXT ========================
 
@@ -320,9 +320,9 @@ class AppViewModel(
         val last = cndls.last()
         val prev = if (cndls.size > 1) cndls[cndls.size - 2] else last
         val change = if (prev.close != 0.0) ((last.close - prev.close) / prev.close * 100) else 0.0
-        val high24 = cndls.maxOf { it.high)
-        val low24 = cndls.minOf { it.low)
-        val avgVol = cndls.map { it.volume).average()
+        val high24 = cndls.maxOf { it.high }
+        val low24 = cndls.minOf { it.low }
+        val avgVol = cndls.map { it.volume }.average()
         val rsiVal = marketDataRepo.calculateRSI(cndls)
         val sma20 = marketDataRepo.calculateSMA(cndls, 20)
         val sma50 = marketDataRepo.calculateSMA(cndls, 50)
@@ -354,13 +354,13 @@ class AppViewModel(
             if (sma20.isNotEmpty() && sma50.isNotEmpty()) {
                 val goldenCross = sma20.last() > sma50.last()
                 appendLine(if (goldenCross) "- Golden Cross (SMA20 > SMA50) 🟢" else "- Death Cross (SMA20 < SMA50) 🔴")
-           )
+            }
             appendLine()
             appendLine("Level Support & Resistance:")
-            supps.forEachIndexed { i, s -> appendLine("  Support ${i + 1}: ${fmt(s)}"))
-            ress.forEachIndexed { i, r -> appendLine("  Resistance ${i + 1}: ${fmt(r)}"))
-       )
-   )
+            supps.forEachIndexed { i, s -> appendLine("  Support ${i + 1}: ${fmt(s)}") }
+            ress.forEachIndexed { i, r -> appendLine("  Resistance ${i + 1}: ${fmt(r)}") }
+        }
+    }
 
     private fun buildAnalysisPrompt(asset: AssetInfo, marketContext: String): String {
         return buildString {
@@ -398,15 +398,15 @@ RISIKO: [Rendah/Sedang/Tinggi]
 
 ⚠️ Disclaimer: Ini bukan saran keuangan.
             """.trimIndent())
-       )
-   )
+        }
+    }
 
     private fun parseAnalysisResult(text: String, symbol: String): AnalysisResult {
         val direction = when {
             text.contains("🟢") || text.contains("Bullish", ignoreCase = true) -> PredictionDirection.BULLISH
             text.contains("🔴") || text.contains("Bearish", ignoreCase = true) -> PredictionDirection.BEARISH
             else -> PredictionDirection.NEUTRAL
-       )
+        }
         val confidence = extractPercent(text, "KEYAKINAN") ?: 50f
         val target = extractPrice(text, "TARGET")
         val stopLoss = extractPrice(text, "STOP LOSS")
@@ -414,7 +414,7 @@ RISIKO: [Rendah/Sedang/Tinggi]
             text.contains("Tinggi", ignoreCase = true) -> RiskLevel.HIGH
             text.contains("Rendah", ignoreCase = true) -> RiskLevel.LOW
             else -> RiskLevel.MEDIUM
-       )
+        }
         val supportLevels = extractLevels(text, "Support")
         val resistanceLevels = extractLevels(text, "Resistance")
 
@@ -429,7 +429,7 @@ RISIKO: [Rendah/Sedang/Tinggi]
             supportLevels = supportLevels,
             resistanceLevels = resistanceLevels,
         )
-   )
+    }
 
     // ======================== PROVIDER CONFIG ========================
 
@@ -441,14 +441,14 @@ RISIKO: [Rendah/Sedang/Tinggi]
                 it.copy(
                     apiProvider = provider,
                     apiKey = config.apiKey,
-                    model = config.model.ifBlank { getDefaultModel(provider)),
-                    baseUrl = config.baseUrl.ifBlank { getDefaultBaseUrl(provider)),
+                    model = config.model.ifBlank { getDefaultModel(provider) },
+                    baseUrl = config.baseUrl.ifBlank { getDefaultBaseUrl(provider) },
                     temperature = config.temperature,
                     maxTokens = config.maxTokens,
                 )
-           )
-       )
-   )
+            }
+        }
+    }
 
     fun updateProviderConfig(provider: String, config: ProviderConfig) {
         viewModelScope.launch {
@@ -457,17 +457,17 @@ RISIKO: [Rendah/Sedang/Tinggi]
             settingsStore.update {
                 it.copy(providerConfigs = newConfigs).let { p ->
                     if (p.apiProvider == provider) applyProviderConfig(p, config) else p
-               )
-           )
-       )
-   )
+                }
+            }
+        }
+    }
 
     // ======================== HELPERS ========================
 
     private fun appendLog(msg: String) {
         val current = errorLog.value
         errorLog.value = if (current.length > 3000) current.takeLast(2500) + "\n$msg" else "$current\n$msg"
-   )
+    }
 
     private fun Float.ifNaN(default: Float): Float = if (isNaN()) default else this
 
@@ -482,10 +482,10 @@ RISIKO: [Rendah/Sedang/Tinggi]
                         apiClient = container.apiClient,
                         backupManager = container.backupManager,
                     ) as T
-               )
-           )
-       )
-   )
+                }
+            }
+        }
+    }
 }
 
 // ======================== EXTENSION FUNCTIONS ========================
@@ -510,7 +510,7 @@ private fun extractLevels(text: String, label: String): List<Double> {
     val regex = Regex("""$label[ \d]*[:\s]*([\d,]+\.?\d*)""", RegexOption.IGNORE_CASE)
     return regex.findAll(text).mapNotNull {
         it.groupValues.getOrNull(1)?.replace(",", "")?.toDoubleOrNull()
-   ).toList()
+    }.toList()
 }
 
 private fun fmt(p: Double): String = when {
