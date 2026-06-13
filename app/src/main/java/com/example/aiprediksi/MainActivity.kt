@@ -244,7 +244,7 @@ fun DashboardScreen(appContainer: AppContainer) {
                 }
             }
 
-            // ===== ANALYSIS RESULT =====
+            // ===== ANALISIS TEXT =====
             if (state.streamingAnalysis.isNotBlank()) {
                 AnalysisCard(
                     text = state.streamingAnalysis,
@@ -253,7 +253,35 @@ fun DashboardScreen(appContainer: AppContainer) {
             }
 
             if (state.analysisResult != null) {
-                PredictionSummaryCard(result = state.analysisResult!!)
+                // Compact summary — visual sudah di chart
+                val dirColor = when (state.analysisResult.direction) {
+                    com.example.aiprediksi.data.PredictionDirection.BULLISH -> Color(0xFF00C853)
+                    com.example.aiprediksi.data.PredictionDirection.BEARISH -> Color(0xFFFF1744)
+                    com.example.aiprediksi.data.PredictionDirection.NEUTRAL -> Color(0xFFAAAAAA)
+                }
+                val dirEmoji = when (state.analysisResult.direction) {
+                    com.example.aiprediksi.data.PredictionDirection.BULLISH -> "🟢"
+                    com.example.aiprediksi.data.PredictionDirection.BEARISH -> "🔴"
+                    com.example.aiprediksi.data.PredictionDirection.NEUTRAL -> "⚪"
+                }
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        Text("$dirEmoji ${state.analysisResult.direction.label}", 
+                            fontWeight = FontWeight.Bold, fontSize = 14.sp, color = dirColor)
+                        Text("🎯 ${fmtPrice(state.analysisResult.targetPrice)}", fontSize = 13.sp, color = Color(0xFF00C853))
+                        Text("🛑 ${fmtPrice(state.analysisResult.stopLoss)}", fontSize = 13.sp, color = Color(0xFFFF1744))
+                        Text("${"%.0f".format(state.analysisResult.confidence)}%", 
+                            fontWeight = FontWeight.Bold, fontSize = 14.sp, color = dirColor)
+                    }
+                }
             }
 
             if (state.errorMessage.isNotBlank()) {
@@ -431,61 +459,6 @@ private fun AnalysisCard(text: String, isLoading: Boolean) {
 }
 
 @Composable
-private fun PredictionSummaryCard(result: com.example.aiprediksi.data.AnalysisResult) {
-    val dirColor = when (result.direction) {
-        com.example.aiprediksi.data.PredictionDirection.BULLISH -> Color(0xFF00C853)
-        com.example.aiprediksi.data.PredictionDirection.BEARISH -> Color(0xFFFF1744)
-        com.example.aiprediksi.data.PredictionDirection.NEUTRAL -> Color(0xFFAAAAAA)
-    }
-    val dirEmoji = when (result.direction) {
-        com.example.aiprediksi.data.PredictionDirection.BULLISH -> "🟢"
-        com.example.aiprediksi.data.PredictionDirection.BEARISH -> "🔴"
-        com.example.aiprediksi.data.PredictionDirection.NEUTRAL -> "⚪"
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("$dirEmoji ${result.symbol}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Spacer(Modifier.weight(1f))
-                Text(
-                    "${result.direction.label}",
-                    color = dirColor,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Keyakinan", fontSize = 11.sp, color = Color(0xFF888888))
-                    Text("${"%.0f".format(result.confidence)}%", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = dirColor)
-                }
-                if (result.targetPrice != null) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Target", fontSize = 11.sp, color = Color(0xFF888888))
-                        Text(fmtPrice(result.targetPrice), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF00C853))
-                    }
-                }
-                if (result.stopLoss != null) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Stop Loss", fontSize = 11.sp, color = Color(0xFF888888))
-                        Text(fmtPrice(result.stopLoss), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFFFF1744))
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Text("Risiko: ${result.riskLevel.label}", fontSize = 12.sp, color = Color(0xFF888888))
-        }
-    }
-}
 
 // ======================== SETTINGS OVERLAY ========================
 
