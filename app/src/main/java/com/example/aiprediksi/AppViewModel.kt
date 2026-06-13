@@ -57,16 +57,15 @@ data class UiState(
     val supports: List<Double> = emptyList(),
     val resistances: List<Double> = emptyList(),
     val hoveredCandle: OHLCV? = null,
-    // Chart zoom
     val visibleCandleCount: Int = 80,
-    val isLive: Boolean = false,
-    // AI
+    val zoomLevel: Int = 80,
+    val maxZoom: Int = 2000,
+    val isLive: Boolean = true,
     val isAnalyzing: Boolean = false,
     val analysisResult: AnalysisResult? = null,
     val streamingAnalysis: String = "",
     val errorMessage: String = "",
     val errorLog: String = "",
-    // Settings
     val showSettings: Boolean = false,
     val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
 )
@@ -105,9 +104,8 @@ class AppViewModel(
         isLoadingData, dataError, changePercent, rsi,
         supports, resistances, hoveredCandle, isAnalyzing,
         analysisResult, streamingAnalysis, errorMessage, errorLog,
-        showSettings, connectionStatus,
-    ) {
-        val arr = it
+        showSettings, connectionStatus, visibleCandleCount, isLive,
+    ) { arr ->
         UiState(
             prefs = arr[0] as AppPrefs,
             selectedAsset = arr[1] as AssetInfo,
@@ -127,17 +125,18 @@ class AppViewModel(
             errorLog = arr[15] as String,
             showSettings = arr[16] as Boolean,
             connectionStatus = arr[17] as ConnectionStatus,
+            visibleCandleCount = arr[18] as Int,
+            isLive = arr[19] as Boolean,
         )
     }.stateIn(viewModelScope, SharingStarted.Lazily, UiState())
 
     init {
-        // Load default asset on start
-        selectAsset(AssetDatabase.cryptoAssets.first())
-        // Start real-time if live mode
-        if (isLive.value) {
-            startAutoRefresh()
-            startKlineStream()
-        }
+        // Auto-start: fetch data + WebSocket real-time
+        isLive.value = true
+        selectedAsset.value = AssetDatabase.cryptoAssets.first()
+        fetchMarketData()
+        startAutoRefresh()
+        startKlineStream()
     }
 
     // ======================== ASSET & INTERVAL ========================
@@ -147,6 +146,7 @@ class AppViewModel(
         analysisResult.value = null
         streamingAnalysis.value = ""
         errorMessage.value = ""
+        visibleCandleCount.value = 80
         fetchMarketData()
         restartKlineStream()
     }
@@ -154,22 +154,48 @@ class AppViewModel(
     fun selectInterval(chartInterval: ChartInterval) {
         interval.value = chartInterval
         analysisResult.value = null
+        visibleCandleCount.value = 80
         fetchMarketData()
         restartKlineStream()
     }
 
     fun setHoveredCandle(c: OHLCV?) { hoveredCandle.value = c }
 
-    fun setVisibleCandleCount(count: Int) { visibleCandleCount.value = count.coerceIn(5, 500) }
+    fun setVisibleCandleCount(count: Int) {
+        visibleCandleCount.value = count.coerceIn(3, 2000)
+    }
+
+    fun setZoomLevel(zoom: Float) {
+        val count = (visibleCandleCount.value / zoom).toInt().coerceIn(3, 2000)
+        visibleCandleCount.value = count
+    }
+
+    fun resetZoom() {
+        visibleCandleCount.value = 80
+    }
 
     fun toggleLive() {
         isLive.value = !isLive.value
         if (isLive.value) {
+            connectionStatus.value = ConnectionStatus.CONNECTED
             startAutoRefresh()
             startKlineStream()
         } else {
+            connectionStatus.value = ConnectionStatus.IDLE
             refreshJob?.cancel()
             wsJob?.cancel()
+        }
+    }
+
+    fun reconnectWebSocket() {
+        connectionStatus.value = ConnectionStatus.TESTING
+        wsJob?.cancel()
+        if (isLive.value) {
+            startKlineStream()
+        } else {
+            isLive.value = true
+            startAutoRefresh()
+            startKlineStream()
         }
     }
 
@@ -188,8 +214,10 @@ class AppViewModel(
         refreshJob = viewModelScope.launch {
             while (true) {
                 if (!isLive.value) break
+                if (candles.value.size < 500) {
+                    fetchMarketData()
+                }
                 delay(getRefreshInterval())
-                fetchMarketData()
             }
         }
     }
@@ -214,10 +242,8 @@ class AppViewModel(
     private var wsJob: kotlinx.coroutines.Job? = null
 
     fun restartKlineStream() {
-        if (isLive.value) {
-            wsJob?.cancel()
-            startKlineStream()
-        }
+        wsJob?.cancel()
+        startKlineStream()
     }
 
     private fun startKlineStream() {
@@ -226,15 +252,18 @@ class AppViewModel(
             val asset = selectedAsset.value
             val symbol = marketDataRepo.getBinanceSymbol(asset)
             val intv = interval.value.binanceValue
+            var retryDelay = 1000L
 
             while (isLive.value) {
                 try {
+                    connectionStatus.value = ConnectionStatus.CONNECTED
                     marketDataRepo.klineStream(symbol, intv).collect { update ->
                         if (!isLive.value) return@collect
                         val current = candles.value.toMutableList()
                         if (current.isNotEmpty()) {
                             val last = current.last()
                             if (last.openTime == update.openTime) {
+                                // Update existing candle in real-time
                                 current[current.size - 1] = OHLCV(
                                     openTime = update.openTime,
                                     open = update.open,
@@ -244,10 +273,8 @@ class AppViewModel(
                                     volume = update.volume,
                                     closeTime = update.closeTime,
                                 )
-                                if (update.isClosed) {
-                                    fetchMarketData()
-                                }
                             } else if (update.openTime > last.openTime) {
+                                // New candle
                                 current.add(
                                     OHLCV(
                                         openTime = update.openTime,
@@ -261,10 +288,26 @@ class AppViewModel(
                                 )
                             }
                             candles.value = current
+
+                            // Auto-calculate indicators on each candle update
+                            if (current.size >= 14) {
+                                rsi.value = marketDataRepo.calculateRSI(current)
+                                changePercent.value = marketDataRepo.calculateChange(current)
+                                val (sup, res) = marketDataRepo.findSupportResistance(
+                                    current.takeLast(50)
+                                )
+                                supports.value = sup
+                                resistances.value = res
+                            }
                         }
                     }
                 } catch (e: Exception) {
-                    if (isLive.value) kotlinx.coroutines.delay(5000)
+                    if (isLive.value) {
+                        connectionStatus.value = ConnectionStatus.FAILED
+                        delay(retryDelay)
+                        retryDelay = (retryDelay * 2).coerceAtMost(30000L)
+                        connectionStatus.value = ConnectionStatus.TESTING
+                    }
                 }
             }
         }
@@ -280,7 +323,7 @@ class AppViewModel(
             dataError.value = ""
 
             val symbol = marketDataRepo.getBinanceSymbol(asset)
-            val result = marketDataRepo.fetchKlines(symbol, intv.binanceValue, 100)
+            val result = marketDataRepo.fetchKlines(symbol, intv.binanceValue, 500)
 
             result.onSuccess { klines ->
                 candles.value = klines
@@ -290,7 +333,6 @@ class AppViewModel(
                 supports.value = sup
                 resistances.value = res
                 dataError.value = ""
-                // Connect status
                 connectionStatus.value = ConnectionStatus.CONNECTED
             }.onFailure { e ->
                 dataError.value = "Gagal ambil data: ${e.message}"
@@ -317,11 +359,9 @@ class AppViewModel(
             errorMessage.value = ""
             appendLog("Memulai analisis untuk ${asset.symbol}...")
 
-            // Build market context
             val marketContext = buildMarketContext(asset, cndls)
             val systemPrompt = buildAnalysisPrompt(asset, marketContext)
 
-            // Try primary provider
             val prefs = settingsStore.prefsFlow.first()
             val provider = prefs.apiProvider
             val config = getProviderConfig(prefs, provider)
@@ -342,7 +382,6 @@ class AppViewModel(
             }
 
             if (!success) {
-                // Fallback chain
                 appendLog("Provider utama gagal, coba fallback...")
                 val fallbackProviders = getAllProviderNames()
                     .filter { it != provider && it != "Custom" }

@@ -52,6 +52,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -66,6 +67,7 @@ import com.example.aiprediksi.data.AssetInfo
 import com.example.aiprediksi.data.AssetType
 import com.example.aiprediksi.data.ChartInterval
 import com.example.aiprediksi.data.ProviderConfig
+import com.example.aiprediksi.ConnectionStatus
 import com.example.aiprediksi.data.getAllProviderNames
 import com.example.aiprediksi.data.getDefaultBaseUrl
 import com.example.aiprediksi.data.getDefaultModel
@@ -93,10 +95,8 @@ fun DashboardScreen(appContainer: AppContainer) {
     val vm: AppViewModel = viewModel(factory = AppViewModel.factory(appContainer))
     val state by vm.uiState.collectAsState()
 
-    LaunchedEffect(Unit) {
-        vm.fetchMarketData()
-    }
-
+    // Data sudah auto-fetch dari init ViewModel + WebSocket real-time
+    
     Scaffold(
         topBar = {
             TopAppBar(
@@ -112,8 +112,8 @@ fun DashboardScreen(appContainer: AppContainer) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { vm.fetchMarketData() }) {
-                        Icon(Icons.Default.Refresh, "Refresh")
+                    IconButton(onClick = { vm.reconnectWebSocket() }) {
+                        Icon(Icons.Default.Refresh, "Reconnect")
                     }
                     IconButton(onClick = { vm.toggleSettings() }) {
                         Icon(Icons.Default.Settings, "Settings")
@@ -174,6 +174,7 @@ fun DashboardScreen(appContainer: AppContainer) {
                         isLive = state.isLive,
                         analysisResult = state.analysisResult,
                         onCrosshairMove = { vm.setHoveredCandle(it) },
+                        onZoomChange = { vm.setVisibleCandleCount(it) },
                     )
                 }
             }
@@ -183,7 +184,9 @@ fun DashboardScreen(appContainer: AppContainer) {
                 isLive = state.isLive,
                 zoomLevel = state.visibleCandleCount,
                 totalCandles = state.candles.size,
+                connectionStatus = state.connectionStatus.name,
                 onToggleLive = { vm.toggleLive() },
+                onReconnect = { vm.reconnectWebSocket() },
             )
 
             // ===== PRICE INFO =====
@@ -281,6 +284,41 @@ fun DashboardScreen(appContainer: AppContainer) {
                         Text("${"%.0f".format(result.confidence)}%", 
                             fontWeight = FontWeight.Bold, fontSize = 14.sp, color = dirColor)
                     }
+                }
+            }
+
+            if (state.connectionStatus != ConnectionStatus.CONNECTED && state.connectionStatus != ConnectionStatus.IDLE) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier.size(6.dp).background(
+                            when (state.connectionStatus) {
+                                ConnectionStatus.CONNECTED -> Color(0xFF00C853)
+                                ConnectionStatus.FAILED -> Color(0xFFFF1744)
+                                ConnectionStatus.TESTING -> Color(0xFFFF9800)
+                                else -> Color(0xFF888888)
+                            },
+                            CircleShape,
+                        )
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        when (state.connectionStatus) {
+                            ConnectionStatus.CONNECTED -> "Terhubung"
+                            ConnectionStatus.FAILED -> "Koneksi putus - reconnect..."
+                            ConnectionStatus.TESTING -> "Menghubungkan..."
+                            else -> ""
+                        },
+                        fontSize = 11.sp,
+                        color = when (state.connectionStatus) {
+                            ConnectionStatus.CONNECTED -> Color(0xFF00C853)
+                            ConnectionStatus.FAILED -> Color(0xFFFF1744)
+                            ConnectionStatus.TESTING -> Color(0xFFFF9800)
+                            else -> Color(0xFF888888)
+                        },
+                    )
                 }
             }
 
@@ -465,20 +503,24 @@ private fun AnalysisCard(text: String, isLoading: Boolean) {
 @Composable
 private fun SettingsOverlay(vm: AppViewModel, state: UiState) {
     val providers = remember { getAllProviderNames() }
-    val selectedProviderState = rememberSaveable { mutableStateOf(state.prefs.apiProvider) }
-    val apiKeyState = rememberSaveable { mutableStateOf(state.prefs.apiKey) }
-    val modelState = rememberSaveable { mutableStateOf(state.prefs.model) }
-    val temperatureState = rememberSaveable { mutableStateOf(state.prefs.temperature) }
-    val maxTokensState = rememberSaveable { mutableStateOf(state.prefs.maxTokens.toString()) }
-    val showProviderDropdownState = rememberSaveable { mutableStateOf(false) }
-    val showModelDropdownState = rememberSaveable { mutableStateOf(false) }
+    var selectedProviderState by rememberSaveable { mutableStateOf(state.prefs.apiProvider) }
+    var apiKeyState by rememberSaveable { mutableStateOf(state.prefs.apiKey) }
+    var modelState by rememberSaveable { mutableStateOf(state.prefs.model) }
+    var temperatureState by rememberSaveable { mutableStateOf(state.prefs.temperature) }
+    var maxTokensState by rememberSaveable { mutableStateOf(state.prefs.maxTokens.toString()) }
+    var showProviderDropdownState by rememberSaveable { mutableStateOf(false) }
+    var showModelDropdownState by rememberSaveable { mutableStateOf(false) }
+    var providerModels by remember { mutableStateOf(getModelsForProvider(state.prefs.apiProvider)) }
+    var showSavedText by remember { mutableStateOf(false) }
 
-    LaunchedEffect(state.prefs.apiProvider, state.prefs.apiKey, state.prefs.model) {
-        selectedProviderState.value = state.prefs.apiProvider
-        apiKeyState.value = state.prefs.apiKey
-        modelState.value = state.prefs.model
-        temperatureState.value = state.prefs.temperature
-        maxTokensState.value = state.prefs.maxTokens.toString()
+    // Sync with VM state
+    LaunchedEffect(state.prefs.apiProvider, state.prefs.apiKey, state.prefs.model, state.prefs.temperature) {
+        selectedProviderState = state.prefs.apiProvider
+        apiKeyState = state.prefs.apiKey
+        modelState = state.prefs.model
+        temperatureState = state.prefs.temperature
+        maxTokensState = state.prefs.maxTokens.toString()
+        providerModels = getModelsForProvider(state.prefs.apiProvider)
     }
 
     Box(
@@ -515,22 +557,22 @@ private fun SettingsOverlay(vm: AppViewModel, state: UiState) {
                 Text("Provider AI", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Box {
                     OutlinedButton(
-                        onClick = { showProviderDropdownState.value = true },
+                        onClick = { showProviderDropdownState = true },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
                     ) {
-                        Text(selectedProviderState.value, maxLines = 1)
+                        Text(selectedProviderState, maxLines = 1)
                     }
                     DropdownMenu(
-                        expanded = showProviderDropdownState.value,
-                        onDismissRequest = { showProviderDropdownState.value = false },
+                        expanded = showProviderDropdownState,
+                        onDismissRequest = { showProviderDropdownState = false },
                     ) {
                         providers.forEach { p ->
                             DropdownMenuItem(
                                 text = { Text(p) },
                                 onClick = {
-                                    selectedProviderState.value = p
-                                    showProviderDropdownState.value = false
+                                    selectedProviderState = p
+                                    showProviderDropdownState = false
                                     vm.selectProvider(p)
                                 },
                             )
@@ -541,22 +583,22 @@ private fun SettingsOverlay(vm: AppViewModel, state: UiState) {
                 Text("Model", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Box {
                     OutlinedButton(
-                        onClick = { showModelDropdownState.value = true },
+                        onClick = { showModelDropdownState = true },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
                     ) {
-                        Text(modelState.value.ifBlank { "Pilih model" }, maxLines = 1)
+                        Text(modelState.ifBlank { "Pilih model" }, maxLines = 1)
                     }
                     DropdownMenu(
-                        expanded = showModelDropdownState.value,
-                        onDismissRequest = { showModelDropdownState.value = false },
+                        expanded = showModelDropdownState,
+                        onDismissRequest = { showModelDropdownState = false },
                     ) {
-                        getModelsForProvider(selectedProviderState.value).forEach { m ->
+                        (providerModels).forEach { m ->
                             DropdownMenuItem(
                                 text = { Text(m) },
                                 onClick = {
-                                    modelState.value = m
-                                    showModelDropdownState.value = false
+                                    modelState = m
+                                    showModelDropdownState = false
                                     vm.updateSetting { it.copy(model = m) }
                                 },
                             )
@@ -565,8 +607,8 @@ private fun SettingsOverlay(vm: AppViewModel, state: UiState) {
                 }
 
                 OutlinedTextField(
-                    value = apiKeyState.value,
-                    onValueChange = { apiKeyState.value = it },
+                    value = apiKeyState,
+                    onValueChange = { apiKeyState = it },
                     label = { Text("API Key", fontSize = 12.sp) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
@@ -574,10 +616,10 @@ private fun SettingsOverlay(vm: AppViewModel, state: UiState) {
                     textStyle = MaterialTheme.typography.bodySmall,
                 )
 
-                Text("Temperature: ${"%.1f".format(temperatureState.value)}", fontSize = 12.sp)
+                Text("Temperature: ${"%.1f".format(temperatureState)}", fontSize = 12.sp)
                 Slider(
-                    value = temperatureState.value,
-                    onValueChange = { temperatureState.value = it },
+                    value = temperatureState,
+                    onValueChange = { temperatureState = it },
                     valueRange = 0f..1f,
                     steps = 9,
                     colors = SliderDefaults.colors(
@@ -586,17 +628,25 @@ private fun SettingsOverlay(vm: AppViewModel, state: UiState) {
                     ),
                 )
 
+                if (showSavedText) {
+                    Text("✓ Tersimpan!", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+                }
                 Button(
                     onClick = {
                         val config = ProviderConfig(
-                            apiKey = apiKeyState.value,
-                            model = modelState.value,
-                            baseUrl = getDefaultBaseUrl(selectedProviderState.value),
-                            temperature = temperatureState.value,
-                            maxTokens = maxTokensState.value.toIntOrNull() ?: 4096,
+                            apiKey = apiKeyState,
+                            model = modelState,
+                            baseUrl = getDefaultBaseUrl(selectedProviderState),
+                            temperature = temperatureState,
+                            maxTokens = maxTokensState.toIntOrNull() ?: 4096,
                         )
-                        vm.updateProviderConfig(selectedProviderState.value, config)
-                        vm.toggleSettings()
+                        vm.updateProviderConfig(selectedProviderState, config)
+                        showSavedText = true
+                        kotlinx.coroutines.MainScope().launch {
+                            kotlinx.coroutines.delay(2000)
+                            showSavedText = false
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
