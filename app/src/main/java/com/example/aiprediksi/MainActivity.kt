@@ -628,6 +628,16 @@ private fun SettingsOverlay(vm: AppViewModel, state: UiState) {
                     ),
                 )
 
+                OutlinedTextField(
+                    value = maxTokensState,
+                    onValueChange = { maxTokensState = it },
+                    label = { Text("Max Tokens", fontSize = 12.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
+                    textStyle = MaterialTheme.typography.bodySmall,
+                )
+
                 if (showSavedText) {
                     Text("✓ Tersimpan!", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp,
                         fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
