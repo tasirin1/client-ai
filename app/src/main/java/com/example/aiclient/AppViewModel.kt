@@ -54,8 +54,6 @@ data class UiState(
     val connectionError: String = "",
     val errorLog: String = "",
     val streamingText: String = "",
-    val zoomLevel: Int = 80,
-    val maxZoom: Int = 2000,
 )
 private data class CoreUiState(
     val prefs: AppPrefs,
@@ -97,8 +95,6 @@ class AppViewModel(
     private val connectionError = MutableStateFlow("")
     private val errorLog = MutableStateFlow("")
     private val streamingText = MutableStateFlow("")
-    private val zoomLevel = MutableStateFlow(80)
-    private val maxZoom = MutableStateFlow(2000)
     private val prefsFlow = settingsStore.prefsFlow
     private val sessionsFlow = chatRepository.observeSessions()
     private val lastMessagesFlow = chatRepository.observeLastMessagesForAllSessions()
@@ -171,9 +167,7 @@ class AppViewModel(
     val uiState: StateFlow<UiState> = combine(
         coreUiStateFlow,
         networkUiStateFlow,
-        zoomLevel,
-        maxZoom,
-    ) { core, network, z, m ->
+    ) { core, network ->
         UiState(
             prefs = core.prefs,
             sessions = core.sessions,
@@ -190,8 +184,6 @@ class AppViewModel(
             connectionError = core.connectionError,
             errorLog = core.errorLog,
             streamingText = core.streamingText,
-            zoomLevel = z,
-            maxZoom = m,
         )
     }.stateIn(
         viewModelScope,

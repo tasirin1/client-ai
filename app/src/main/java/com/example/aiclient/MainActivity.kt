@@ -218,8 +218,6 @@ private fun MainScreen(
     onClearErrorLog: () -> Unit,
     streamingText: String = "",
 ) {
-    val zoomLevel = uiState.zoomLevel
-    val maxZoom = uiState.maxZoom
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val showSettings = rememberSaveable { mutableStateOf(false) }
