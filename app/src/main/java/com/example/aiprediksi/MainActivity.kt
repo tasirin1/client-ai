@@ -652,7 +652,38 @@ private fun SettingsOverlay(vm: AppViewModel, state: UiState) {
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(10.dp),
                 ) {
-                    Text("Simpan", fontWeight = FontWeight.SemiBold)
+                    Text("Simpan Pengaturan", fontWeight = FontWeight.SemiBold)
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Text("⚡ Auto-Analisis", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Analisis otomatis saat ganti aset", fontSize = 12.sp)
+                    androidx.compose.material3.Switch(
+                        checked = state.prefs.enableAutoAnalyze,
+                        onCheckedChange = { vm.updateSetting { it.copy(enableAutoAnalyze = !it.enableAutoAnalyze) } },
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text("💾 Cadangkan data", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = { vm.backupData() },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                    ) { Text("Backup", fontSize = 12.sp) }
+                    OutlinedButton(
+                        onClick = { vm.restoreData() },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                    ) { Text("Restore", fontSize = 12.sp) }
                 }
             }
         }

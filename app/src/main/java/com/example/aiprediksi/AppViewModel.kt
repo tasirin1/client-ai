@@ -149,6 +149,12 @@ class AppViewModel(
         visibleCandleCount.value = 80
         fetchMarketData()
         restartKlineStream()
+        viewModelScope.launch {
+            val prefs = settingsStore.prefsFlow.first()
+            if (prefs.enableAutoAnalyze) {
+                analyzeChart()
+            }
+        }
     }
 
     fun selectInterval(chartInterval: ChartInterval) {
@@ -203,6 +209,25 @@ class AppViewModel(
 
     fun updateSetting(transform: (AppPrefs) -> AppPrefs) {
         viewModelScope.launch { settingsStore.update(transform) }
+    }
+
+    fun backupData() {
+        viewModelScope.launch {
+            try {
+                val backup = backupManager.createBackup()
+                val json = backupManager.serialize(backup)
+                appendLog("📦 Backup siap: ${json.length} chars")
+                appendLog("💾 Copy JSON dari error log untuk disimpan")
+            } catch (e: Exception) {
+                appendLog("❌ Backup gagal: ${e.message}")
+            }
+        }
+    }
+
+    fun restoreData() {
+        viewModelScope.launch {
+            appendLog("ℹ️ Restore: paste JSON backup ke dalam error log, lalu restart")
+        }
     }
 
     // ======================== AUTO-REFRESH ========================

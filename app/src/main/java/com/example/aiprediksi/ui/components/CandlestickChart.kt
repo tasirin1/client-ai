@@ -198,6 +198,21 @@ fun CandlestickChart(
             drawSMA(candles, startIdx, visibleInt, 20, Color(0xFFFFD740), priceToY, chartW)
             drawSMA(candles, startIdx, visibleInt, 50, Color(0xFF448AFF), priceToY, chartW)
 
+            // ===== VOLUME BARS =====
+            val maxVol = visibleCandles.maxOf { it.volume }
+            val volScale = 0.25f // Volume bars take bottom 25% of chart
+            for ((i, c) in visibleCandles.withIndex()) {
+                val x = PAD_L + i * candleW + candleW / 2f
+                val isBullish = c.close >= c.open
+                val candleColor = if (isBullish) bullishColor else bearishColor
+                val volHeight = (c.volume / maxVol * chartH * volScale).toFloat()
+                drawRect(
+                    candleColor.copy(alpha = 0.3f),
+                    topLeft = Offset(x - halfBody, h - PAD_B - volHeight),
+                    size = Size(bodyW, volHeight),
+                )
+            }
+
             // ===== PREDICTION OVERLAY =====
             drawPredictionOverlay(
                 analysisResult = analysisResult,
