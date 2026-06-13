@@ -230,39 +230,39 @@ class AppViewModel(
             while (isLive.value) {
                 try {
                     marketDataRepo.klineStream(symbol, intv).collect { update ->
-                if (!isLive.value) return@collect
-                val current = candles.value.toMutableList()
-                if (current.isNotEmpty()) {
-                    val last = current.last()
-                    if (last.openTime == update.openTime) {
-                        // Update last candle (still forming)
-                        current[current.size - 1] = OHLCV(
-                            openTime = update.openTime,
-                            open = update.open,
-                            high = maxOf(last.high, update.high),
-                            low = minOf(last.low, update.low),
-                            close = update.close,
-                            volume = update.volume,
-                            closeTime = update.closeTime,
-                        )
-                        if (update.isClosed) {
-                            // Add next candle and fetch full data
-                            fetchMarketData()
+                        if (!isLive.value) return@collect
+                        val current = candles.value.toMutableList()
+                        if (current.isNotEmpty()) {
+                            val last = current.last()
+                            if (last.openTime == update.openTime) {
+                                current[current.size - 1] = OHLCV(
+                                    openTime = update.openTime,
+                                    open = update.open,
+                                    high = maxOf(last.high, update.high),
+                                    low = minOf(last.low, update.low),
+                                    close = update.close,
+                                    volume = update.volume,
+                                    closeTime = update.closeTime,
+                                )
+                                if (update.isClosed) {
+                                    fetchMarketData()
+                                }
+                            } else if (update.openTime > last.openTime) {
+                                current.add(
+                                    OHLCV(
+                                        openTime = update.openTime,
+                                        open = update.open,
+                                        high = update.high,
+                                        low = update.low,
+                                        close = update.close,
+                                        volume = update.volume,
+                                        closeTime = update.closeTime,
+                                    )
+                                )
+                            }
+                            candles.value = current
                         }
-                    } else if (update.openTime > last.openTime) {
-                        // New candle started
-                        current.add(OHLCV(
-                            openTime = update.openTime,
-                            open = update.open,
-                            high = update.high,
-                            low = update.low,
-                            close = update.close,
-                            volume = update.volume,
-                            closeTime = update.closeTime,
-                        ))
                     }
-                    candles.value = current
-                }
                 } catch (e: Exception) {
                     if (isLive.value) kotlinx.coroutines.delay(5000)
                 }
