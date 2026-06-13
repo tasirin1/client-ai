@@ -2,6 +2,8 @@ package com.example.aiprediksi.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,39 +85,47 @@ fun CandlestickChart(
                 .height(420.dp)
                 .pointerInput(Unit) {
                     detectTransformGestures { _, pan, zoom, _ ->
-                        // Zoom
                         if (zoom != 1f) {
                             val newCount = visibleCount / zoom
                             visibleCount = newCount.coerceIn(
                                 MIN_CANDLES.toFloat(),
                                 minOf(MAX_CANDLES.toFloat(), count.toFloat())
                             )
+                            onZoomChange(visibleCount.roundToInt())
                         }
-                        // Pan
-                        if (pan.x != 0f) {
+                        if (pan.x != 0f && zoom == 1f) {
                             val panCandles = (-pan.x / 8f).roundToInt()
                             val currScroll = scrollOffset.roundToInt()
                             scrollOffset = (currScroll + panCandles).coerceIn(0, maxScroll).toFloat()
                         }
-                        onZoomChange(visibleCount.roundToInt())
                     }
                 }
-                .pointerInput(candles.size) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val pos = event.changes.firstOrNull()?.position ?: break
-                            if (pos.x < PAD_L || pos.x > size.width - PAD_R) {
-                                event.changes.forEach { it.consume() }
-                                continue
-                            }
-                            val candleW = (size.width - PAD_L - PAD_R) / visibleInt
-                            val idx = startIdx + ((pos.x - PAD_L) / candleW).toInt()
+                .pointerInput(visibleInt, startIdx) {
+                    detectTapGestures { offset ->
+                        if (offset.x in PAD_L..(size.width - PAD_R)) {
+                            val cw = (size.width - PAD_L - PAD_R) / visibleInt
+                            val idx = startIdx + ((offset.x - PAD_L) / cw).toInt()
                             crosshairIndexState.value = idx.coerceIn(0, count - 1)
                             onCrosshairMove(candles.getOrNull(idx))
-                            event.changes.forEach { it.consume() }
                         }
                     }
+                }
+                .pointerInput(visibleInt, startIdx) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            crosshairIndexState.value = -1
+                            onCrosshairMove(null)
+                        },
+                        onHorizontalDrag = { change, _ ->
+                            if (change.position.x in PAD_L..(size.width - PAD_R)) {
+                                val cw = (size.width - PAD_L - PAD_R) / visibleInt
+                                val idx = startIdx + ((change.position.x - PAD_L) / cw).toInt()
+                                crosshairIndexState.value = idx.coerceIn(0, count - 1)
+                                onCrosshairMove(candles.getOrNull(idx))
+                            }
+                            change.consume()
+                        },
+                    )
                 },
         ) {
             val w = size.width
