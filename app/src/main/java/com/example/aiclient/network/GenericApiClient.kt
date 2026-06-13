@@ -1,5 +1,3 @@
-package com.example.aiclient.network
-
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -99,53 +97,6 @@ class GenericApiClient(
                 )
             }
         }
-    }
-
-    fun executeStreaming(
-        url: String,
-        headersText: String,
-        body: String,
-    ): Flow<String> = callbackFlow {
-        val requestBuilder = Request.Builder().url(url.trim())
-        val headers = parseHeaders(headersText)
-        requestBuilder.headers(headers)
-
-        val mediaType = headers["Content-Type"]?.toMediaType()
-            ?: "application/json; charset=utf-8".toMediaType()
-        requestBuilder.method("POST", body.toRequestBody(mediaType))
-
-        val call = client.newCall(requestBuilder.build())
-        call.enqueue(object : okhttp3.Callback {
-            override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
-                try { close(e) } catch (_: Exception) {}
-            }
-
-            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
-                try {
-                    val body = response.body ?: run {
-                        try { close() } catch (_: Exception) {}
-                        return
-                    }
-                    val reader = BufferedReader(InputStreamReader(body.byteStream()))
-                    var line: String?
-                    while (reader.readLine().also { line = it } != null) {
-                        val l = line ?: continue
-                        if (l.startsWith("data: ")) {
-                            val data = l.removePrefix("data: ").trim()
-                            if (data == "[DONE]") continue
-                            try {
-                                trySend(data)
-                            } catch (_: Exception) {}
-                        }
-                    }
-                    try { close() } catch (_: Exception) {}
-                } catch (e: Exception) {
-                    try { close(e) } catch (_: Exception) {}
-                }
-            }
-        })
-
-        awaitClose { call.cancel() }
     }
 
     suspend fun executeStreaming(

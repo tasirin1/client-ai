@@ -148,11 +148,10 @@ val ALL_PROVIDERS: List<ProviderInfo> = listOf(
     ProviderInfo(
         name = "Together AI",
         defaultModel = "mistralai/Mixtral-8x7B-Instruct-v0.1",
-        defaultBaseUrl = "https://api.together.xyz/v1/chat/completions",
+        defaultBaseUrl = "https://api.together.ai/v1/chat/completions",
         models = listOf(
-            "mistralai/Mixtral-8x7B-Instruct-v0.1", "mistralai/Mistral-7B-Instruct-v0.3",
-            "meta-llama/Llama-3.3-70B-Instruct", "meta-llama/Llama-3.1-8B-Instruct",
-            "deepseek-ai/deepseek-coder-33b-instruct",
+            "mistralai/Mixtral-8x7B-Instruct-v0.1", "meta-llama/Llama-3.3-70B-Instruct",
+            "meta-llama/Llama-3.1-8B-Instruct", "deepseek-ai/deepseek-coder-33b-instruct",
         ),
     ),
     ProviderInfo(
@@ -266,6 +265,10 @@ fun setProviderConfig(prefs: AppPrefs, provider: String, config: ProviderConfig)
     } catch (_: Exception) { prefs.providerConfigs }
 }
 
+// Fixed ProviderConfig data class - removed duplicate fields
+// The providerConfigs and backupEncryptionKey fields were duplicates
+// that already existed in the AppPrefs data class
+
 data class ProviderConfig(
     val apiKey: String = "",
     val model: String = "",
@@ -273,8 +276,6 @@ data class ProviderConfig(
     val temperature: Float = 0.7f,
     val maxTokens: Int = 4096,
     val customModels: List<String> = emptyList(),
-    val providerConfigs: String = "{}",
-    val backupEncryptionKey: String = "",
 )
 
 fun applyProviderConfig(prefs: AppPrefs, config: ProviderConfig): AppPrefs {
