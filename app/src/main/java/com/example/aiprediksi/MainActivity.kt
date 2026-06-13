@@ -252,14 +252,14 @@ fun DashboardScreen(appContainer: AppContainer) {
                 )
             }
 
-            if (state.analysisResult != null) {
-                // Compact summary — visual sudah di chart
-                val dirColor = when (state.analysisResult.direction) {
+            val result = state.analysisResult
+            if (result != null) {
+                val dirColor = when (result.direction) {
                     com.example.aiprediksi.data.PredictionDirection.BULLISH -> Color(0xFF00C853)
                     com.example.aiprediksi.data.PredictionDirection.BEARISH -> Color(0xFFFF1744)
                     com.example.aiprediksi.data.PredictionDirection.NEUTRAL -> Color(0xFFAAAAAA)
                 }
-                val dirEmoji = when (state.analysisResult.direction) {
+                val dirEmoji = when (result.direction) {
                     com.example.aiprediksi.data.PredictionDirection.BULLISH -> "🟢"
                     com.example.aiprediksi.data.PredictionDirection.BEARISH -> "🔴"
                     com.example.aiprediksi.data.PredictionDirection.NEUTRAL -> "⚪"
@@ -274,11 +274,11 @@ fun DashboardScreen(appContainer: AppContainer) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceEvenly,
                     ) {
-                        Text("$dirEmoji ${state.analysisResult.direction.label}", 
+                        Text("$dirEmoji ${result.direction.label}", 
                             fontWeight = FontWeight.Bold, fontSize = 14.sp, color = dirColor)
-                        Text("🎯 ${fmtPrice(state.analysisResult.targetPrice)}", fontSize = 13.sp, color = Color(0xFF00C853))
-                        Text("🛑 ${fmtPrice(state.analysisResult.stopLoss)}", fontSize = 13.sp, color = Color(0xFFFF1744))
-                        Text("${"%.0f".format(state.analysisResult.confidence)}%", 
+                        if (result.targetPrice != null) Text("🎯 ${fmtPrice(result.targetPrice)}", fontSize = 13.sp, color = Color(0xFF00C853))
+                        if (result.stopLoss != null) Text("🛑 ${fmtPrice(result.stopLoss)}", fontSize = 13.sp, color = Color(0xFFFF1744))
+                        Text("${"%.0f".format(result.confidence)}%", 
                             fontWeight = FontWeight.Bold, fontSize = 14.sp, color = dirColor)
                     }
                 }
