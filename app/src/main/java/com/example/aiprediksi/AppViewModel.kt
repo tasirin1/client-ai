@@ -227,12 +227,9 @@ class AppViewModel(
             val symbol = marketDataRepo.getBinanceSymbol(asset)
             val intv = interval.value.binanceValue
 
-            marketDataRepo.klineStream(symbol, intv)
-                .retry(10) { cause ->
-                    kotlinx.coroutines.delay(5000)
-                    isLive.value
-                }
-                .collect { update ->
+            while (isLive.value) {
+                try {
+                    marketDataRepo.klineStream(symbol, intv).collect { update ->
                 if (!isLive.value) return@collect
                 val current = candles.value.toMutableList()
                 if (current.isNotEmpty()) {
@@ -265,6 +262,9 @@ class AppViewModel(
                         ))
                     }
                     candles.value = current
+                }
+                } catch (e: Exception) {
+                    if (isLive.value) kotlinx.coroutines.delay(5000)
                 }
             }
         }
