@@ -458,7 +458,7 @@ private fun AnalysisCard(text: String, isLoading: Boolean) {
     }
 }
 
-@Composable
+
 
 // ======================== SETTINGS OVERLAY ========================
 
