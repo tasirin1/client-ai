@@ -89,7 +89,7 @@ class AppViewModel(
     private val resistances = MutableStateFlow<List<Double>>(emptyList())
     private val hoveredCandle = MutableStateFlow<OHLCV?>(null)
     private val visibleCandleCount = MutableStateFlow(80)
-    private val isLive = MutableStateFlow(false)
+    private val isLive = MutableStateFlow(true)
     private val isAnalyzing = MutableStateFlow(false)
     private val analysisResult = MutableStateFlow<AnalysisResult?>(null)
     private val streamingAnalysis = MutableStateFlow("")
@@ -133,10 +133,11 @@ class AppViewModel(
     init {
         // Load default asset on start
         selectAsset(AssetDatabase.cryptoAssets.first())
-        // Start auto-refresh loop
-        startAutoRefresh()
-        // Start WebSocket stream
-        startKlineStream()
+        // Start real-time if live mode
+        if (isLive.value) {
+            startAutoRefresh()
+            startKlineStream()
+        }
     }
 
     // ======================== ASSET & INTERVAL ========================
@@ -147,23 +148,28 @@ class AppViewModel(
         streamingAnalysis.value = ""
         errorMessage.value = ""
         fetchMarketData()
+        restartKlineStream()
     }
 
     fun selectInterval(chartInterval: ChartInterval) {
         interval.value = chartInterval
         analysisResult.value = null
         fetchMarketData()
+        restartKlineStream()
     }
 
     fun setHoveredCandle(c: OHLCV?) { hoveredCandle.value = c }
 
-    fun setVisibleCandleCount(count: Int) { visibleCandleCount.value = count.coerceIn(10, 200) }
+    fun setVisibleCandleCount(count: Int) { visibleCandleCount.value = count.coerceIn(5, 500) }
 
     fun toggleLive() {
         isLive.value = !isLive.value
         if (isLive.value) {
             startAutoRefresh()
             startKlineStream()
+        } else {
+            refreshJob?.cancel()
+            wsJob?.cancel()
         }
     }
 
@@ -207,6 +213,13 @@ class AppViewModel(
 
     private var wsJob: kotlinx.coroutines.Job? = null
 
+    fun restartKlineStream() {
+        if (isLive.value) {
+            wsJob?.cancel()
+            startKlineStream()
+        }
+    }
+
     private fun startKlineStream() {
         wsJob?.cancel()
         wsJob = viewModelScope.launch {
@@ -214,7 +227,12 @@ class AppViewModel(
             val symbol = marketDataRepo.getBinanceSymbol(asset)
             val intv = interval.value.binanceValue
 
-            marketDataRepo.klineStream(symbol, intv).collect { update ->
+            marketDataRepo.klineStream(symbol, intv)
+                .retry(10) { cause ->
+                    kotlinx.coroutines.delay(5000)
+                    isLive.value
+                }
+                .collect { update ->
                 if (!isLive.value) return@collect
                 val current = candles.value.toMutableList()
                 if (current.isNotEmpty()) {

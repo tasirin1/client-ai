@@ -37,9 +37,9 @@ import com.example.aiprediksi.data.PredictionDirection
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-private const val MIN_CANDLES = 10
-private const val MAX_CANDLES = 200
-private const val DEFAULT_CANDLES = 80
+private const val MIN_CANDLES = 5
+private const val MAX_CANDLES = 500
+private const val DEFAULT_CANDLES = 100
 
 @Composable
 fun CandlestickChart(
