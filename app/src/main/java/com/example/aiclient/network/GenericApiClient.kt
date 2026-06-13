@@ -1,3 +1,5 @@
+package com.example.aiclient.network
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
