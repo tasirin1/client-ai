@@ -172,6 +172,7 @@ fun DashboardScreen(appContainer: AppContainer) {
                     CandlestickChart(
                         candles = state.candles,
                         isLive = state.isLive,
+                        analysisResult = state.analysisResult,
                         onCrosshairMove = { vm.setHoveredCandle(it) },
                     )
                 }

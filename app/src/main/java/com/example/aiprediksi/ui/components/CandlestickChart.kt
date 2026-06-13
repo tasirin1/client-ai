@@ -30,6 +30,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.aiprediksi.data.OHLCV
+import com.example.aiprediksi.data.AnalysisResult
+import com.example.aiprediksi.data.PredictionDirection
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -47,6 +49,7 @@ fun CandlestickChart(
     gridColor: Color = Color(0xFF333333),
     textColor: Color = Color(0xFFAAAAAA),
     isLive: Boolean = false,
+    analysisResult: com.example.aiprediksi.data.AnalysisResult? = null,
     onCrosshairMove: (OHLCV?) -> Unit = {},
 ) {
     if (candles.isEmpty()) return
@@ -167,6 +170,14 @@ fun CandlestickChart(
             drawRect(color, topLeft = Offset(x - halfBody, top), size = Size(bodyW, bodyH))
         }
 
+        // ===== PREDICTION OVERLAY =====
+        if (analysisResult != null) {
+            drawPredictionOverlay(
+                analysisResult, priceToY, padL, padT, chartW, chartH,
+                textPaint, boldPaint, bullishColor, bearishColor
+            )
+        }
+
         // Crosshair
         val chIdx = crosshairIndexState.value
         if (chIdx in startIdx until startIdx + visibleInt) {
@@ -269,3 +280,219 @@ fun fmtVol(v: Double): String = when {
     else -> "%.2f".format(v)
 }
 fun fmtPrice(p: Double): String = fmt(p)
+
+/**
+ * Draw prediction overlay on the chart: direction arrow, target/stop lines, 
+ * entry price, support/resistance levels, projected path
+ */
+private fun DrawScope.drawPredictionOverlay(
+    result: com.example.aiprediksi.data.AnalysisResult,
+    priceToY: (Double) -> Float,
+    padL: Float,
+    padT: Float,
+    chartW: Float,
+    chartH: Float,
+    textPaint: android.graphics.Paint,
+    boldPaint: android.graphics.Paint,
+    bullishColor: Color,
+    bearishColor: Color,
+) {
+    val lastX = padL + chartW
+    val midX = padL + chartW * 0.7f
+    val dirColor = when (result.direction) {
+        PredictionDirection.BULLISH -> bullishColor
+        PredictionDirection.BEARISH -> bearishColor
+        PredictionDirection.NEUTRAL -> Color(0xFFAAAAAA)
+    }
+    val dirEmoji = when (result.direction) {
+        PredictionDirection.BULLISH -> "🟢"
+        PredictionDirection.BEARISH -> "🔴"
+        PredictionDirection.NEUTRAL -> "⚪"
+    }
+    val dashEffect = floatArrayOf(10f, 6f)
+
+    // ---- 1. Direction Arrow at last candle ----
+    val arrowY = priceToY(result.entryPrice ?: 0.0).let { if (it.isNaN()) padT + 20f else it }
+    val arrowSize = 24f
+    val arrowX = lastX - 30f
+
+    // Arrow background circle
+    drawCircle(dirColor.copy(alpha = 0.2f), arrowSize + 8f, Offset(arrowX, arrowY))
+    drawCircle(dirColor, arrowSize + 4f, Offset(arrowX, arrowY), style = Stroke(width = 2f))
+
+    // Arrow direction
+    val arrowPath = android.graphics.Path().apply {
+        when (result.direction) {
+            PredictionDirection.BULLISH -> {
+                moveTo(arrowX, arrowY - arrowSize)
+                lineTo(arrowX - arrowSize * 0.6f, arrowY + arrowSize * 0.3f)
+                lineTo(arrowX + arrowSize * 0.6f, arrowY + arrowSize * 0.3f)
+                close()
+            }
+            PredictionDirection.BEARISH -> {
+                moveTo(arrowX, arrowY + arrowSize)
+                lineTo(arrowX - arrowSize * 0.6f, arrowY - arrowSize * 0.3f)
+                lineTo(arrowX + arrowSize * 0.6f, arrowY - arrowSize * 0.3f)
+                close()
+            }
+            PredictionDirection.NEUTRAL -> {
+                moveTo(arrowX - arrowSize * 0.6f, arrowY)
+                lineTo(arrowX + arrowSize * 0.6f, arrowY)
+                moveTo(arrowX, arrowY - arrowSize * 0.4f)
+                lineTo(arrowX, arrowY + arrowSize * 0.4f)
+            }
+        }
+    }
+    drawPath(arrowPath.asComposePath(), dirColor)
+
+    // ---- 2. Target Price Line (green dashed) ----
+    if (result.targetPrice != null) {
+        val targetY = priceToY(result.targetPrice)
+        val isAbove = result.direction == PredictionDirection.BULLISH
+        // Dashed line across chart
+        drawLine(
+            bullishColor.copy(alpha = 0.7f),
+            Offset(padL, targetY),
+            Offset(lastX, targetY),
+            strokeWidth = 2f,
+            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(dashEffect, 0f),
+        )
+        // Target label
+        drawContext.canvas.nativeCanvas.drawText(
+            "🎯 ${fmtPrice(result.targetPrice)}",
+            padL + 4f, targetY - 8f,
+            boldPaint.apply { color = bullishColor.hashCode() }
+        )
+    }
+
+    // ---- 3. Stop Loss Line (red dashed) ----
+    if (result.stopLoss != null) {
+        val slY = priceToY(result.stopLoss)
+        drawLine(
+            bearishColor.copy(alpha = 0.7f),
+            Offset(padL, slY),
+            Offset(lastX, slY),
+            strokeWidth = 2f,
+            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(dashEffect, 0f),
+        )
+        drawContext.canvas.nativeCanvas.drawText(
+            "🛑 ${fmtPrice(result.stopLoss)}",
+            padL + 4f, slY - 8f,
+            boldPaint.apply { color = bearishColor.hashCode() }
+        )
+    }
+
+    // ---- 4. Support Levels (blue dashed) ----
+    result.supportLevels.forEachIndexed { i, s ->
+        val sY = priceToY(s)
+        drawLine(
+            Color(0xFF448AFF).copy(alpha = 0.5f),
+            Offset(padL, sY),
+            Offset(lastX, sY),
+            strokeWidth = 1f,
+            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(5f, 5f), 0f),
+        )
+        drawContext.canvas.nativeCanvas.drawText(
+            "S${i + 1} ${fmtPrice(s)}",
+            padL + 4f, sY - 4f,
+            textPaint.apply { color = Color(0xFF448AFF).hashCode() }
+        )
+    }
+
+    // ---- 5. Resistance Levels (orange dashed) ----
+    result.resistanceLevels.forEachIndexed { i, r ->
+        val rY = priceToY(r)
+        drawLine(
+            Color(0xFFFF9800).copy(alpha = 0.5f),
+            Offset(padL, rY),
+            Offset(lastX, rY),
+            strokeWidth = 1f,
+            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(5f, 5f), 0f),
+        )
+        drawContext.canvas.nativeCanvas.drawText(
+            "R${i + 1} ${fmtPrice(r)}",
+            padL + 4f, rY - 4f,
+            textPaint.apply { color = Color(0xFFFF9800).hashCode() }
+        )
+    }
+
+    // ---- 6. Confidence Badge ----
+    val confText = "${dirEmoji} ${result.direction.label} ${"%.0f".format(result.confidence)}%"
+    val confColor = dirColor
+    drawRoundRect(
+        confColor.copy(alpha = 0.15f),
+        topLeft = Offset(lastX - 160f, padT + 4f),
+        size = androidx.compose.ui.geometry.Size(156f, 28f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(14f, 14f),
+    )
+    drawContext.canvas.nativeCanvas.drawText(
+        confText,
+        lastX - 150f, padT + 24f,
+        boldPaint.apply { color = confColor.hashCode(); textSize = 24f }
+    )
+
+    // ---- 7. Dotted Projected Path ----
+    val endY = when (result.direction) {
+        PredictionDirection.BULLISH -> priceToY(result.targetPrice ?: 0.0)
+        PredictionDirection.BEARISH -> priceToY(result.stopLoss ?: 0.0)
+        PredictionDirection.NEUTRAL -> priceToY(0.0)
+    }
+    if (!endY.isNaN() && endY > 0f) {
+        val startY = priceToY(result.entryPrice ?: 0.0).let { if (it.isNaN()) arrowY else it }
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(lastX, startY)
+            // Curve projection
+            cubicTo(
+                lastX + 60f, startY,
+                lastX + 40f, endY,
+                lastX + 80f, endY,
+            )
+        }
+        drawPath(
+            path,
+            dirColor.copy(alpha = 0.6f),
+            style = Stroke(
+                width = 2f,
+                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f),
+            ),
+        )
+        // Arrow at end of projection
+        val projEndX = lastX + 80f
+        when (result.direction) {
+            PredictionDirection.BULLISH -> {
+                drawPath(androidx.compose.ui.graphics.Path().apply {
+                    moveTo(projEndX, endY - 8f)
+                    lineTo(projEndX - 6f, endY + 4f)
+                    lineTo(projEndX + 6f, endY + 4f)
+                    close()
+                }, dirColor.copy(alpha = 0.8f))
+            }
+            PredictionDirection.BEARISH -> {
+                drawPath(androidx.compose.ui.graphics.Path().apply {
+                    moveTo(projEndX, endY + 8f)
+                    lineTo(projEndX - 6f, endY - 4f)
+                    lineTo(projEndX + 6f, endY - 4f)
+                    close()
+                }, dirColor.copy(alpha = 0.8f))
+            }
+            else -> {}
+        }
+    }
+}
+
+// Helper: convert Android Path to Compose Path
+private fun android.graphics.Path.asComposePath(): androidx.compose.ui.graphics.Path {
+    val p = androidx.compose.ui.graphics.Path()
+    val iter = android.graphics.PathIterator(this)
+    val coords = FloatArray(6)
+    while (iter.next(coords)) {
+        when (iter.currentSegment) {
+            android.graphics.PathIterator.SEG_MOVETO -> p.moveTo(coords[0], coords[1])
+            android.graphics.PathIterator.SEG_LINETO -> p.lineTo(coords[0], coords[1])
+            android.graphics.PathIterator.SEG_QUADTO -> p.quadraticBezierTo(coords[0], coords[1], coords[2], coords[3])
+            android.graphics.PathIterator.SEG_CUBICTO -> p.cubicTo(coords[0], coords[1], coords[2], coords[3], coords[4], coords[5])
+            android.graphics.PathIterator.SEG_CLOSE -> p.close()
+        }
+    }
+    return p
+}
