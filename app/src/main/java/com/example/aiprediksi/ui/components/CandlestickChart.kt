@@ -25,6 +25,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -320,8 +325,8 @@ private fun DrawScope.drawPredictionOverlay(
     drawCircle(dirColor.copy(alpha = 0.2f), arrowSize + 8f, Offset(arrowX, arrowY))
     drawCircle(dirColor, arrowSize + 4f, Offset(arrowX, arrowY), style = Stroke(width = 2f))
 
-    // Arrow direction
-    val arrowPath = android.graphics.Path().apply {
+    // Arrow direction (Compose Path)
+    val arrowPath = androidx.compose.ui.graphics.Path().apply {
         when (result.direction) {
             PredictionDirection.BULLISH -> {
                 moveTo(arrowX, arrowY - arrowSize)
@@ -343,7 +348,7 @@ private fun DrawScope.drawPredictionOverlay(
             }
         }
     }
-    drawPath(arrowPath.asComposePath(), dirColor)
+    drawPath(arrowPath, dirColor)
 
     // ---- 2. Target Price Line (green dashed) ----
     if (result.targetPrice != null) {
@@ -480,19 +485,3 @@ private fun DrawScope.drawPredictionOverlay(
     }
 }
 
-// Helper: convert Android Path to Compose Path
-private fun android.graphics.Path.asComposePath(): androidx.compose.ui.graphics.Path {
-    val p = androidx.compose.ui.graphics.Path()
-    val iter = android.graphics.PathIterator(this)
-    val coords = FloatArray(6)
-    while (iter.next(coords)) {
-        when (iter.currentSegment) {
-            android.graphics.PathIterator.SEG_MOVETO -> p.moveTo(coords[0], coords[1])
-            android.graphics.PathIterator.SEG_LINETO -> p.lineTo(coords[0], coords[1])
-            android.graphics.PathIterator.SEG_QUADTO -> p.quadraticBezierTo(coords[0], coords[1], coords[2], coords[3])
-            android.graphics.PathIterator.SEG_CUBICTO -> p.cubicTo(coords[0], coords[1], coords[2], coords[3], coords[4], coords[5])
-            android.graphics.PathIterator.SEG_CLOSE -> p.close()
-        }
-    }
-    return p
-}
