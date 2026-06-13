@@ -178,7 +178,7 @@ fun CandlestickChart(
         // ===== PREDICTION OVERLAY =====
         if (analysisResult != null) {
             drawPredictionOverlay(
-                analysisResult, priceToY, padL, padT, chartW, chartH,
+                analysisResult, { p -> priceToY(p) }, padL, padT, chartW, chartH,
                 textPaint, boldPaint, bullishColor, bearishColor
             )
         }
