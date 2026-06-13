@@ -177,6 +177,8 @@ class MainActivity : ComponentActivity() {
                     errorLog = uiState.errorLog,
                     onClearErrorLog = vm::clearErrorLog,
                     streamingText = uiState.streamingText,
+                    zoomLevel = uiState.zoomLevel,
+                    maxZoom = uiState.maxZoom,
                 )
             }
         }
