@@ -1215,26 +1215,7 @@ private fun SettingsDialog(
                 Text("Model: ${autoConfig.model.ifEmpty { getDefaultModel(autoProvider) }}", color = Color(0xFF7C5CFC), fontSize = 12.sp, fontWeight = FontWeight.Medium)
 
                 // Base URL
-                Text("Base URL", color = Color(0xFF999999), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                OutlinedTextField(
-                    value = baseUrl.value,
-                    onValueChange = {
-                        baseUrl.value = it
-                        onUpdateBaseUrl(it)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF7C5CFC),
-                        unfocusedBorderColor = Color(0xFF2A2A2A),
-                        cursorColor = Color(0xFF7C5CFC),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedContainerColor = Color(0xFF0F0F0F),
-                        unfocusedContainerColor = Color(0xFF0F0F0F),
-                    ),
-                    shape = RoundedCornerShape(8.dp),
-                )
+                Text("Base URL: ${autoConfig.baseUrl.ifEmpty { getDefaultBaseUrl(autoProvider) }}", color = Color(0xFF7C5CFC), fontSize = 12.sp, fontWeight = FontWeight.Medium)
 
                 // Temperature
                 Text(
