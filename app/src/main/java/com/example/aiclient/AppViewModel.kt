@@ -24,10 +24,6 @@ import com.example.aiclient.network.toJsonString
 import org.json.JSONObject
 import org.json.JSONArray
 import kotlinx.coroutines.flow.MutableStateFlow
-
-// Extension function for nullable int/float
-inline fun Float.ifZero(default: Float): Float = if (this == 0f) default else this
-inline fun Int.ifZero(default: Int): Int = if (this == 0) default else this
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -35,6 +31,10 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+// Extension function for nullable int/float
+inline fun Float.ifZero(default: Float): Float = if (this == 0f) default else this
+inline fun Int.ifZero(default: Int): Int = if (this == 0) default else this
 
 // Helper to get first provider with API key
 private fun getAutoProvider(prefs: AppPrefs): String {
