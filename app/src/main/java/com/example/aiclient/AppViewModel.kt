@@ -18,13 +18,16 @@ import com.example.aiclient.data.getAllProviderNames
 import com.example.aiclient.data.getModelsForProvider
 import com.example.aiclient.data.getFallbackChain
 import com.example.aiclient.data.getProviderConfigsMap
-import com.example.aiclient.data.ProviderConfig
 import com.example.aiclient.network.ApiResult
 import com.example.aiclient.network.GenericApiClient
 import com.example.aiclient.network.toJsonString
 import org.json.JSONObject
 import org.json.JSONArray
 import kotlinx.coroutines.flow.MutableStateFlow
+
+// Extension function for nullable int/float
+inline fun Float.ifZero(default: Float): Float = if (this == 0f) default else this
+inline fun Int.ifZero(default: Int): Int = if (this == 0) default else this
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
