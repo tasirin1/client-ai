@@ -1148,28 +1148,18 @@ private fun SettingsDialog(
     onClearErrorLog: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
-    val providers = getAllProviderNames()
-    val modelsByProvider: Map<String, List<String>> = 
-        providers.associateWith { name ->
-            if (name == "Custom") emptyList()
-            else getModelsForProvider(name)
-        }
-    val baseUrls = providers.associateWith { name ->
-        if (name == "Custom") prefs.baseUrl
-        else getDefaultBaseUrl(name)
+    // Auto-detect first provider with API key
+    val providerConfigs = com.example.aiclient.data.getProviderConfigsMap(prefs)
+    val providersWithKeys = getAllProviderNames().filter { p ->
+        p != "Custom" && providerConfigs[p]?.apiKey?.isNotBlank() == true
     }
-
-    val selectedProvider = remember(prefs.apiProvider) { mutableStateOf(prefs.apiProvider) }
-    val selectedModel = remember(prefs.apiProvider, prefs.model) { mutableStateOf(prefs.model) }
-    val apiKey = remember(prefs.apiProvider, prefs.apiKey) { mutableStateOf(prefs.apiKey) }
-    val baseUrl = remember(prefs.apiProvider, prefs.baseUrl) { mutableStateOf(prefs.baseUrl) }
-    val temperature = remember(prefs.apiProvider) { mutableFloatStateOf(prefs.temperature) }
-    val maxTokens = remember(prefs.apiProvider) { mutableStateOf(prefs.maxTokens.toString()) }
+    val autoProvider = providersWithKeys.firstOrNull() ?: prefs.apiProvider
+    val autoConfig = providerConfigs[autoProvider] ?: com.example.aiclient.data.ProviderConfig()
+    val apiKey = remember(prefs.apiProvider, prefs.apiKey) { mutableStateOf(autoConfig.apiKey.ifEmpty { prefs.apiKey }) }
+    val temperature = remember(prefs.apiProvider) { mutableFloatStateOf(autoConfig.temperature.ifZero { prefs.temperature }) }
+    val maxTokens = remember(prefs.apiProvider) { mutableStateOf(autoConfig.maxTokens.ifZero { prefs.maxTokens }.toString()) }
     val systemPrompt = remember { mutableStateOf(prefs.globalMemory) }
     val showApiKey = remember { mutableStateOf(false) }
-    val availableModels = modelsByProvider[selectedProvider.value] ?: emptyList()
-    val customModels = remember(selectedProvider.value) { mutableStateOf(com.example.aiclient.data.getCustomModels(prefs, selectedProvider.value)) }
-    val newCustomModel = remember { mutableStateOf("") }
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
@@ -1192,27 +1182,8 @@ private fun SettingsDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                // Provider buttons
-                Text("Provider", color = Color(0xFF999999), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                ) {
-                    providers.forEach { provider ->
-                        val isSelected = selectedProvider.value == provider
-                        OutlinedButton(
-                            onClick = {
-                                selectedProvider.value = provider
-                                onUpdateProvider(provider)
-                            },
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = if (isSelected) Color(0xFF7C5CFC) else Color(0xFF999999),
-                            ),
-                        ) {
-                            Text(provider, fontSize = 12.sp)
-                        }
-                    }
-                }
+                // Provider (Auto: ${autoProvider})
+                Text("Provider: $autoProvider", color = Color(0xFF7C5CFC), fontSize = 12.sp, fontWeight = FontWeight.Medium)
 
                 // API Key
                 Text("API Key", color = Color(0xFF999999), fontSize = 12.sp, fontWeight = FontWeight.Medium)

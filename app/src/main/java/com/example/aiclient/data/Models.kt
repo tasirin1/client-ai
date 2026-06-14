@@ -249,6 +249,31 @@ fun getProviderConfig(prefs: AppPrefs, provider: String): ProviderConfig {
     } catch (_: Exception) { ProviderConfig() }
 }
 
+fun getProviderConfigsMap(prefs: AppPrefs): Map<String, ProviderConfig> {
+    return try {
+        val json = org.json.JSONObject(prefs.providerConfigs)
+        val result = mutableMapOf<String, ProviderConfig>()
+        val iterator = json.keys()
+        while (iterator.hasNext()) {
+            val provider = iterator.next()
+            val cfg = json.getJSONObject(provider)
+            val cmArr = cfg.optJSONArray("customModels")
+            val cmList = if (cmArr != null) {
+                (0 until cmArr.length()).map { cmArr.optString(it, "") }.filter { it.isNotBlank() }
+            } else emptyList()
+            result[provider] = ProviderConfig(
+                apiKey = cfg.optString("apiKey", ""),
+                model = cfg.optString("model", getDefaultModel(provider)),
+                baseUrl = cfg.optString("baseUrl", getDefaultBaseUrl(provider)),
+                temperature = cfg.optDouble("temperature", 0.7).toFloat(),
+                maxTokens = cfg.optInt("maxTokens", 4096),
+                customModels = cmList,
+            )
+        }
+        result
+    } catch (_: Exception) { emptyMap() }
+}
+
 fun setProviderConfig(prefs: AppPrefs, provider: String, config: ProviderConfig): String {
     return try {
         val json = org.json.JSONObject(prefs.providerConfigs)
