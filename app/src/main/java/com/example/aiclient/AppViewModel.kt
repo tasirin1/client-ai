@@ -285,8 +285,8 @@ class AppViewModel(
                     apiKey = config.apiKey.ifEmpty { prefs.apiKey },
                     model = config.model.ifEmpty { getDefaultModel(autoProvider) },
                     baseUrl = config.baseUrl.ifEmpty { getDefaultBaseUrl(autoProvider) },
-                    temperature = config.temperature.ifZero { prefs.temperature },
-                    maxTokens = config.maxTokens.ifZero { prefs.maxTokens },
+                    temperature = config.temperature.ifZero(prefs.temperature),
+                    maxTokens = config.maxTokens.ifZero(prefs.maxTokens),
                 )
             } else prefs
             if (effectivePrefs.apiKey.isBlank()) {
@@ -412,8 +412,8 @@ class AppViewModel(
                         apiKey = config.apiKey.ifEmpty { prefs.apiKey },
                         model = config.model.ifEmpty { getDefaultModel(autoProvider) },
                         baseUrl = config.baseUrl.ifEmpty { getDefaultBaseUrl(autoProvider) },
-                        temperature = config.temperature.ifZero { prefs.temperature },
-                        maxTokens = config.maxTokens.ifZero { prefs.maxTokens },
+                        temperature = config.temperature.ifZero(prefs.temperature),
+                        maxTokens = config.maxTokens.ifZero(prefs.maxTokens),
                     )
                 } else prefs
                 if (effectivePrefs.apiKey.isBlank() && effectivePrefs.apiProvider != "Custom") {
