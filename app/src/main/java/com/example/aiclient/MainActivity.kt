@@ -120,6 +120,11 @@ import com.example.aiclient.data.SessionEntity
 import com.example.aiclient.data.getAllProviderNames
 import com.example.aiclient.data.getDefaultBaseUrl
 import com.example.aiclient.data.getDefaultModel
+import com.example.aiclient.data.getModelsForProvider
+import com.example.aiclient.data.getProviderConfig
+import com.example.aiclient.data.setProviderConfig
+import com.example.aiclient.data.ProviderConfig
+import com.example.aiclient.data.getCustomModels
 import com.example.aiclient.ui.AIClientTheme
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -1141,18 +1146,39 @@ private fun SettingsDialog(
     onClearErrorLog: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
-    // Auto-detect first provider with API key
-    val providerConfigs = com.example.aiclient.data.getProviderConfigsMap(prefs)
-    val providersWithKeys = getAllProviderNames().filter { p ->
-        p != "Custom" && providerConfigs[p]?.apiKey?.isNotBlank() == true
+    val allProviders = remember { getAllProviderNames() }
+    val selectedProvider = remember { mutableStateOf(prefs.apiProvider) }
+    val showProviderDropdown = remember { mutableStateOf(false) }
+    val showModelDropdown = remember { mutableStateOf(false) }
+    // Load saved config for the selected provider from JSON
+    val savedConfig = remember(selectedProvider.value) {
+        getProviderConfig(prefs, selectedProvider.value)
     }
-    val autoProvider = providersWithKeys.firstOrNull() ?: prefs.apiProvider
-    val autoConfig = providerConfigs[autoProvider] ?: com.example.aiclient.data.ProviderConfig()
-    val apiKey = remember(prefs.apiProvider, prefs.apiKey) { mutableStateOf(autoConfig.apiKey.ifEmpty { prefs.apiKey }) }
-    val temperature = remember(prefs.apiProvider) { mutableFloatStateOf(autoConfig.temperature.ifZero(prefs.temperature)) }
-    val maxTokens = remember(prefs.apiProvider) { mutableStateOf(autoConfig.maxTokens.ifZero(prefs.maxTokens).toString()) }
+    val apiKey = remember { mutableStateOf(savedConfig.apiKey.ifEmpty { prefs.apiKey }) }
+    val temperature = remember { mutableFloatStateOf(savedConfig.temperature.ifZero(prefs.temperature)) }
+    val maxTokens = remember { mutableStateOf(savedConfig.maxTokens.ifZero(prefs.maxTokens).toString()) }
     val systemPrompt = remember { mutableStateOf(prefs.globalMemory) }
     val showApiKey = remember { mutableStateOf(false) }
+    // Available models for the selected provider (built-in + custom)
+    val availableModels = remember(selectedProvider.value) {
+        val builtIn = getModelsForProvider(selectedProvider.value)
+        val custom = getCustomModels(prefs, selectedProvider.value)
+        builtIn + custom
+    }
+    val currentModel = remember { mutableStateOf(savedConfig.model.ifEmpty { getDefaultModel(selectedProvider.value) }.ifEmpty { prefs.model }) }
+    val currentBaseUrl = remember { mutableStateOf(savedConfig.baseUrl.ifEmpty { getDefaultBaseUrl(selectedProvider.value) }.ifEmpty { prefs.baseUrl }) }
+    val newCustomModel = remember { mutableStateOf("") }
+    // Sync local state when provider or prefs change externally
+    LaunchedEffect(prefs.apiProvider, prefs.apiKey, prefs.model, prefs.baseUrl, prefs.temperature, prefs.maxTokens) {
+        if (selectedProvider.value == prefs.apiProvider) {
+            val config = getProviderConfig(prefs, prefs.apiProvider)
+            apiKey.value = config.apiKey.ifEmpty { prefs.apiKey }
+            currentModel.value = config.model.ifEmpty { getDefaultModel(prefs.apiProvider) }.ifEmpty { prefs.model }
+            currentBaseUrl.value = config.baseUrl.ifEmpty { getDefaultBaseUrl(prefs.apiProvider) }.ifEmpty { prefs.baseUrl }
+            temperature.floatValue = config.temperature.ifZero(prefs.temperature)
+            maxTokens.value = config.maxTokens.ifZero(prefs.maxTokens).toString()
+        }
+    }
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
@@ -1175,8 +1201,64 @@ private fun SettingsDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                // Provider (Auto: ${autoProvider})
-                Text("Provider: $autoProvider", color = Color(0xFF7C5CFC), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                // Provider selector
+                Text("Provider", color = Color(0xFF999999), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Box {
+                    OutlinedTextField(
+                        value = selectedProvider.value,
+                        onValueChange = {},
+                        modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = {
+                            IconButton(onClick = { showProviderDropdown.value = true }) {
+                                Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF7C5CFC))
+                            }
+                        },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF7C5CFC),
+                            unfocusedBorderColor = Color(0xFF2A2A2A),
+                            cursorColor = Color(0xFF7C5CFC),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = Color(0xFF0F0F0F),
+                            unfocusedContainerColor = Color(0xFF0F0F0F),
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                    )
+                    DropdownMenu(
+                        expanded = showProviderDropdown.value,
+                        onDismissRequest = { showProviderDropdown.value = false },
+                    ) {
+                        allProviders.forEach { provider ->
+                            DropdownMenuItem(
+                                text = { Text(provider, color = Color.White) },
+                                onClick = {
+                                    if (provider != selectedProvider.value) {
+                                        // Save current provider config before switching
+                                        val config = ProviderConfig(
+                                            apiKey = apiKey.value,
+                                            model = currentModel.value,
+                                            baseUrl = currentBaseUrl.value,
+                                            temperature = temperature.floatValue,
+                                            maxTokens = maxTokens.value.toIntOrNull() ?: prefs.maxTokens,
+                                        )
+                                        val newConfigs = setProviderConfig(prefs, selectedProvider.value, config)
+                                        selectedProvider.value = provider
+                                        onUpdateProvider(provider)
+                                        // Load new provider config
+                                        val newConfig = getProviderConfig(prefs.copy(providerConfigs = newConfigs), provider)
+                                        apiKey.value = newConfig.apiKey.ifEmpty { prefs.apiKey }
+                                        currentModel.value = newConfig.model.ifEmpty { getDefaultModel(provider) }.ifEmpty { prefs.model }
+                                        currentBaseUrl.value = newConfig.baseUrl.ifEmpty { getDefaultBaseUrl(provider) }.ifEmpty { prefs.baseUrl }
+                                        temperature.floatValue = newConfig.temperature.ifZero(prefs.temperature)
+                                        maxTokens.value = newConfig.maxTokens.ifZero(prefs.maxTokens).toString()
+                                    }
+                                    showProviderDropdown.value = false
+                                },
+                            )
+                        }
+                    }
+                }
 
                 // API Key
                 Text("API Key", color = Color(0xFF999999), fontSize = 12.sp, fontWeight = FontWeight.Medium)
@@ -1211,11 +1293,112 @@ private fun SettingsDialog(
                     shape = RoundedCornerShape(8.dp),
                 )
 
-                // Model (Auto)
-                Text("Model: ${autoConfig.model.ifEmpty { getDefaultModel(autoProvider) }}", color = Color(0xFF7C5CFC), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                // Model selector
+                Text("Model", color = Color(0xFF999999), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Box {
+                    OutlinedTextField(
+                        value = currentModel.value,
+                        onValueChange = {
+                            currentModel.value = it
+                            onUpdateModel(it)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = {
+                            IconButton(onClick = { showModelDropdown.value = true }) {
+                                Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF7C5CFC))
+                            }
+                        },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF7C5CFC),
+                            unfocusedBorderColor = Color(0xFF2A2A2A),
+                            cursorColor = Color(0xFF7C5CFC),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = Color(0xFF0F0F0F),
+                            unfocusedContainerColor = Color(0xFF0F0F0F),
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                    )
+                    DropdownMenu(
+                        expanded = showModelDropdown.value,
+                        onDismissRequest = { showModelDropdown.value = false },
+                    ) {
+                        availableModels.forEach { model ->
+                            DropdownMenuItem(
+                                text = { Text(model, color = Color.White) },
+                                onClick = {
+                                    currentModel.value = model
+                                    onUpdateModel(model)
+                                    showModelDropdown.value = false
+                                },
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(Color(0xFF2A2A2A))
+                                .padding(vertical = 4.dp)
+                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedTextField(
+                                value = newCustomModel.value,
+                                onValueChange = { newCustomModel.value = it },
+                                placeholder = { Text("Tambah model...", color = Color(0xFF666666), fontSize = 12.sp) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.bodySmall.copy(color = Color.White),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFF7C5CFC),
+                                    unfocusedBorderColor = Color(0xFF2A2A2A),
+                                    cursorColor = Color(0xFF7C5CFC),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedContainerColor = Color(0xFF0F0F0F),
+                                    unfocusedContainerColor = Color(0xFF0F0F0F),
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                            )
+                            IconButton(
+                                onClick = {
+                                    val m = newCustomModel.value.trim()
+                                    if (m.isNotBlank()) {
+                                        onAddCustomModel(m)
+                                        newCustomModel.value = ""
+                                    }
+                                },
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "Tambah model", tint = Color(0xFF7C5CFC))
+                            }
+                        }
+                    }
+                }
 
                 // Base URL
-                Text("Base URL: ${autoConfig.baseUrl.ifEmpty { getDefaultBaseUrl(autoProvider) }}", color = Color(0xFF7C5CFC), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text("Base URL", color = Color(0xFF999999), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                OutlinedTextField(
+                    value = currentBaseUrl.value,
+                    onValueChange = {
+                        currentBaseUrl.value = it
+                        onUpdateBaseUrl(it)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF7C5CFC),
+                        unfocusedBorderColor = Color(0xFF2A2A2A),
+                        cursorColor = Color(0xFF7C5CFC),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color(0xFF0F0F0F),
+                        unfocusedContainerColor = Color(0xFF0F0F0F),
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                )
 
                 // Temperature
                 Text(
@@ -1262,7 +1445,6 @@ private fun SettingsDialog(
                     ),
                     shape = RoundedCornerShape(8.dp),
                 )
-
 
                 // Test Connection
                 Text("Test Koneksi", color = Color(0xFF999999), fontSize = 12.sp, fontWeight = FontWeight.Medium)
