@@ -118,6 +118,8 @@ import com.example.aiclient.ConnectionStatus
 import com.example.aiclient.data.MessageEntity
 import com.example.aiclient.data.SessionEntity
 import com.example.aiclient.data.getAllProviderNames
+import com.example.aiclient.data.getDefaultBaseUrl
+import com.example.aiclient.data.getDefaultModel
 import com.example.aiclient.ui.AIClientTheme
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -178,13 +180,6 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-    }
-}
-
-val modelsByProvider: Map<String, List<String>> by lazy {
-    getAllProviderNames().associateWith { name ->
-        if (name == "Custom") emptyList()
-        else getModelsForProvider(name)
     }
 }
 
