@@ -3,7 +3,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.aiclient.data.AppPrefs
-import com.example.aiclient.data.BackupData
 import com.example.aiclient.data.BackupManager
 import com.example.aiclient.data.ChatRepository
 import com.example.aiclient.data.MessageEntity
@@ -465,7 +464,7 @@ class AppViewModel(
                     if (session_?.title?.startsWith("Chat") != false || session_?.title?.startsWith("Sesi") != false) {
                         chatRepository.renameSession(session.id, inputForRename.ifBlank { "Chat" })
                     }
-                } else if (!streamingSuccess) {
+                } else {
                     // Fallback to non-streaming
                     runCatching {
                         apiClient.execute(
@@ -570,8 +569,7 @@ class AppViewModel(
     }
     private fun buildRequest(prefs: AppPrefs, history: List<MessageEntity>, input: String, imageBase64: String = ""): Triple<String, String, String> {
         if (prefs.apiKey.isBlank()) {
-            val (h, b) = buildCustomRequest(prefs, history, input)
-            return Triple(prefs.baseUrl.ifBlank { prefs.endpointUrl }, h, b)
+            return buildCustomRequest(prefs, history, input)
         }
         // Auto-switch ke vision model jika ada gambar
         val effectivePrefs = if (imageBase64.isNotBlank()) {
@@ -702,12 +700,20 @@ class AppViewModel(
                 "error" -> "assistant"
                 else -> msg.role
             }
-            messages.add("""{"role": "${role}", "content": ${msg.content.toJsonString()}}""")
+            if (msg.imageBase64.isNotBlank()) {
+                messages.add("""{"role": "${role}", "content": [{"type": "text", "text": ${msg.content.toJsonString()}}, {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": "${msg.imageBase64}"}}]}""")
+            } else {
+                messages.add("""{"role": "${role}", "content": ${msg.content.toJsonString()}}""")
+            }
         }
         if (input.isNotBlank()) {
             val timeStr = getTimeString(now)
             val userContent = "[Waktu: $timeStr]\n\n$input"
-            messages.add("""{"role": "user", "content": ${userContent.toJsonString()}}""")
+            if (imageBase64.isNotBlank()) {
+                messages.add("""{"role": "user", "content": [{"type": "text", "text": ${userContent.toJsonString()}}, {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": "${imageBase64}"}}]}""")
+            } else {
+                messages.add("""{"role": "user", "content": ${userContent.toJsonString()}}""")
+            }
         }
         val messagesJson = messages.joinToString(",\n")
         val sysContentA = if (prefs.globalMemory.isNotBlank()) {
@@ -871,13 +877,6 @@ class AppViewModel(
         }
     }
     // --- Backup / Restore ---
-    fun createBackupData(): BackupData? {
-        var result: BackupData? = null
-        viewModelScope.launch {
-            result = backupManager.createBackup()
-        }
-        return result
-    }
     suspend fun createBackupJson(): String {
         val backup = backupManager.createBackup()
         return backupManager.serialize(backup)
