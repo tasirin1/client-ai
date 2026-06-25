@@ -15,6 +15,7 @@ import com.example.aiclient.data.getProviderConfig
 import com.example.aiclient.data.setProviderConfig
 import com.example.aiclient.data.getAllProviderNames
 import com.example.aiclient.data.getModelsForProvider
+import com.example.aiclient.data.getCustomModels
 import com.example.aiclient.data.getFallbackChain
 import com.example.aiclient.network.ApiResult
 import com.example.aiclient.network.GenericApiClient
@@ -100,6 +101,9 @@ class AppViewModel(
     private val connectionError = MutableStateFlow("")
     private val errorLog = MutableStateFlow("")
     private val streamingText = MutableStateFlow("")
+    private val prefsFlow = settingsStore.prefsFlow
+    private val sessionsFlow = chatRepository.observeSessions()
+    private val lastMessagesFlow = chatRepository.observeLastMessagesForAllSessions()
     private val availableProvidersFlow: StateFlow<List<Pair<String, List<String>>>> = prefsFlow.map { prefs ->
         getAllProviderNames().mapNotNull { provider ->
             if (provider == "Custom") return@mapNotNull null
@@ -111,9 +115,6 @@ class AppViewModel(
             } else null
         }
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), emptyList())
-    private val prefsFlow = settingsStore.prefsFlow
-    private val sessionsFlow = chatRepository.observeSessions()
-    private val lastMessagesFlow = chatRepository.observeLastMessagesForAllSessions()
     private val sessionPreviewsFlow = combine(
         sessionsFlow,
         lastMessagesFlow,
