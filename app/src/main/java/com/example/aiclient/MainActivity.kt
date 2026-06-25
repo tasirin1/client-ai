@@ -177,6 +177,7 @@ class MainActivity : ComponentActivity() {
                     onRestore = { restoreLauncher.launch(arrayOf("application/json")) },
                     onAddCustomModel = vm::addCustomModel,
                     onRemoveCustomModel = vm::removeCustomModel,
+                    onSelectModel = vm::selectModel,
                     connectionStatus = uiState.connectionStatus,
                     connectionError = uiState.connectionError,
                     errorLog = uiState.errorLog,
@@ -210,6 +211,7 @@ private fun MainScreen(
     onRestore: () -> Unit,
     onAddCustomModel: (String) -> Unit = {},
     onRemoveCustomModel: (String) -> Unit = {},
+    onSelectModel: (String, String) -> Unit = { _, _ -> },
     connectionStatus: ConnectionStatus,
     connectionError: String,
     errorLog: String,
@@ -308,6 +310,13 @@ private fun MainScreen(
                     streamingText = uiState.streamingText,
                     modifier = Modifier.weight(1f),
                     onEditMessage = onEditMessage,
+                )
+
+                ModelSelectorBar(
+                    availableProviders = uiState.availableProviders,
+                    currentProvider = uiState.prefs.apiProvider,
+                    currentModel = uiState.prefs.model,
+                    onSelectModel = onSelectModel,
                 )
 
                 ComposerBar(
@@ -993,6 +1002,110 @@ private fun ChatBubble(message: MessageEntity, onEdit: ((String, String) -> Unit
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModelSelectorBar(
+    availableProviders: List<Pair<String, List<String>>>,
+    currentProvider: String,
+    currentModel: String,
+    onSelectModel: (String, String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = true }
+            .background(Color(0xFF181818))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "\uD83E\uDD16",
+            fontSize = 14.sp,
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            currentModel.ifBlank { "Pilih model" },
+            color = Color(0xFFE8E8E8),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            Icons.Default.ArrowDropDown,
+            contentDescription = "Pilih model",
+            tint = Color(0xFF777777),
+            modifier = Modifier.size(20.dp),
+        )
+        
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .background(Color(0xFF1E1E1E))
+                .widthIn(max = 320.dp),
+        ) {
+            if (availableProviders.isEmpty()) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            "Belum ada provider dengan API Key\nAtur di Pengaturan",
+                            color = Color(0xFF777777),
+                            fontSize = 12.sp,
+                        )
+                    },
+                    onClick = { expanded = false },
+                )
+            } else {
+                availableProviders.forEach { (provider, models) ->
+                    // Provider header
+                    Text(
+                        text = provider,
+                        color = Color(0xFF999999),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                    models.forEach { model ->
+                        val isSelected = provider == currentProvider && model == currentModel
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = model,
+                                        color = if (isSelected) Color(0xFF7C5CFC) else Color(0xFFE8E8E8),
+                                        fontSize = 13.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    if (isSelected) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = "Terpilih",
+                                            tint = Color(0xFF7C5CFC),
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
+                                }
+                            },
+                            onClick = {
+                                expanded = false
+                                if (!isSelected) {
+                                    onSelectModel(provider, model)
+                                }
+                            },
+                        )
                     }
                 }
             }

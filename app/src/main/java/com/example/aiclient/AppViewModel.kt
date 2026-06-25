@@ -16,7 +16,6 @@ import com.example.aiclient.data.setProviderConfig
 import com.example.aiclient.data.getAllProviderNames
 import com.example.aiclient.data.getModelsForProvider
 import com.example.aiclient.data.getFallbackChain
-import com.example.aiclient.data.getProviderConfigsMap
 import com.example.aiclient.network.ApiResult
 import com.example.aiclient.network.GenericApiClient
 import com.example.aiclient.network.toJsonString
@@ -34,15 +33,6 @@ import kotlinx.coroutines.launch
 // Extension function for nullable int/float
 inline fun Float.ifZero(default: Float): Float = if (this == 0f) default else this
 inline fun Int.ifZero(default: Int): Int = if (this == 0) default else this
-
-// Helper to get first provider with API key
-private fun getAutoProvider(prefs: AppPrefs): String {
-    val providerConfigs = getProviderConfigsMap(prefs)
-    val providersWithKeys = getAllProviderNames().filter { p ->
-        p != "Custom" && providerConfigs[p]?.apiKey?.isNotBlank() == true
-    }
-    return providersWithKeys.firstOrNull() ?: prefs.apiProvider
-}
 
 enum class ConnectionStatus {
     IDLE, TESTING, CONNECTED, FAILED
@@ -68,6 +58,7 @@ data class UiState(
     val connectionError: String = "",
     val errorLog: String = "",
     val streamingText: String = "",
+    val availableProviders: List<Pair<String, List<String>>> = emptyList(),
 )
 private data class CoreUiState(
     val prefs: AppPrefs,
@@ -109,6 +100,17 @@ class AppViewModel(
     private val connectionError = MutableStateFlow("")
     private val errorLog = MutableStateFlow("")
     private val streamingText = MutableStateFlow("")
+    private val availableProvidersFlow: StateFlow<List<Pair<String, List<String>>>> = prefsFlow.map { prefs ->
+        getAllProviderNames().mapNotNull { provider ->
+            if (provider == "Custom") return@mapNotNull null
+            val config = getProviderConfig(prefs, provider)
+            if (config.apiKey.isNotBlank()) {
+                val models = getModelsForProvider(provider)
+                val custom = getCustomModels(prefs, provider)
+                provider to (models + custom)
+            } else null
+        }
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), emptyList())
     private val prefsFlow = settingsStore.prefsFlow
     private val sessionsFlow = chatRepository.observeSessions()
     private val lastMessagesFlow = chatRepository.observeLastMessagesForAllSessions()
@@ -198,6 +200,7 @@ class AppViewModel(
             connectionError = core.connectionError,
             errorLog = core.errorLog,
             streamingText = core.streamingText,
+            availableProviders = availableProvidersFlow.value,
         )
     }.stateIn(
         viewModelScope,
@@ -256,6 +259,40 @@ class AppViewModel(
             }
         }
     }
+    fun selectModel(provider: String, model: String) {
+        viewModelScope.launch {
+            val prefs = settingsStore.prefsFlow.first()
+            if (provider != prefs.apiProvider) {
+                // Save current provider's config
+                val currentConfig = ProviderConfig(
+                    apiKey = prefs.apiKey,
+                    model = prefs.model,
+                    baseUrl = prefs.baseUrl,
+                    temperature = prefs.temperature,
+                    maxTokens = prefs.maxTokens,
+                )
+                val configsSaved = setProviderConfig(prefs, prefs.apiProvider, currentConfig)
+                // Load new provider's config, then override model
+                val updatedPrefs = prefs.copy(providerConfigs = configsSaved)
+                val newConfig = getProviderConfig(updatedPrefs, provider)
+                val newModel = if (model.isNotBlank()) model else newConfig.model.ifEmpty { getDefaultModel(provider) }
+                settingsStore.update {
+                    updatedPrefs.copy(
+                        apiProvider = provider,
+                        apiKey = newConfig.apiKey,
+                        model = newModel,
+                        baseUrl = newConfig.baseUrl.ifEmpty { getDefaultBaseUrl(provider) },
+                        temperature = newConfig.temperature,
+                        maxTokens = newConfig.maxTokens,
+                    )
+                }
+            } else {
+                // Just update model for same provider
+                settingsStore.update { it.copy(model = model) }
+            }
+        }
+    }
+
     // --- Legacy settings ---
     fun updateEndpointUrl(value: String) = persistPrefs { it.copy(endpointUrl = value) }
     fun updateMethod(value: String) = persistPrefs { it.copy(method = value) }
@@ -274,33 +311,19 @@ class AppViewModel(
             connectionError.value = ""
             appendErrorLog("Test koneksi dimulai...")
             val prefs = uiState.value.prefs
-            // Auto-select provider with API key
-            val autoProvider = getAutoProvider(prefs)
-            val providerConfigs = getProviderConfigsMap(prefs)
-            val effectivePrefs = if (autoProvider != prefs.apiProvider) {
-                val config = providerConfigs[autoProvider] ?: ProviderConfig()
-                prefs.copy(
-                    apiProvider = autoProvider,
-                    apiKey = config.apiKey.ifEmpty { prefs.apiKey },
-                    model = config.model.ifEmpty { getDefaultModel(autoProvider) },
-                    baseUrl = config.baseUrl.ifEmpty { getDefaultBaseUrl(autoProvider) },
-                    temperature = config.temperature.ifZero(prefs.temperature),
-                    maxTokens = config.maxTokens.ifZero(prefs.maxTokens),
-                )
-            } else prefs
-            if (effectivePrefs.apiKey.isBlank()) {
+            if (prefs.apiKey.isBlank()) {
                 connectionStatus.value = ConnectionStatus.FAILED
                 appendErrorLog("Test koneksi gagal: API Key belum diisi")
                 connectionError.value = "API Key belum diisi"
                 return@launch
             }
-            if (effectivePrefs.baseUrl.isBlank()) {
+            if (prefs.baseUrl.isBlank()) {
                 connectionStatus.value = ConnectionStatus.FAILED
                 appendErrorLog("Test koneksi gagal: Base URL belum diisi")
                 connectionError.value = "Base URL belum diisi"
                 return@launch
             }
-            val provider = effectivePrefs.apiProvider
+            val provider = prefs.apiProvider
             val (url, headers, body) = when {
                 provider.equals("Google", ignoreCase = true) -> {
                     val googleUrl = prefs.baseUrl.trimEnd('/') + "/${prefs.model}:generateContent?key=${prefs.apiKey}"
@@ -401,32 +424,18 @@ class AppViewModel(
                 responseMessage.value = ""
                 responseBody.value = ""
                 val prefs = uiState.value.prefs
-                // Auto-select provider with API key
-                val autoProvider = getAutoProvider(prefs)
-                val providerConfigs = getProviderConfigsMap(prefs)
-                val effectivePrefs = if (autoProvider != prefs.apiProvider) {
-                    val config = providerConfigs[autoProvider] ?: ProviderConfig()
-                    prefs.copy(
-                        apiProvider = autoProvider,
-                        apiKey = config.apiKey.ifEmpty { prefs.apiKey },
-                        model = config.model.ifEmpty { getDefaultModel(autoProvider) },
-                        baseUrl = config.baseUrl.ifEmpty { getDefaultBaseUrl(autoProvider) },
-                        temperature = config.temperature.ifZero(prefs.temperature),
-                        maxTokens = config.maxTokens.ifZero(prefs.maxTokens),
-                    )
-                } else prefs
-                if (effectivePrefs.apiKey.isBlank() && effectivePrefs.apiProvider != "Custom") {
+                if (prefs.apiKey.isBlank() && prefs.apiProvider != "Custom") {
                     errorMessage.value = "API Key belum diatur. Silakan isi di menu Pengaturan."
                     loading.value = false
                     return@launch
                 }
-                val session = ensureCurrentSession(effectivePrefs)
+                val session = ensureCurrentSession(prefs)
                 val allHistory = chatRepository.getAllMessagesOnce()
                 val inputForRename = (if (input.isNotBlank()) input else "Gambar").take(28).trim()
                 // Build request with streaming enabled
-                var (requestUrl, headers, body) = buildRequest(effectivePrefs, allHistory, input, imageBase64)
+                var (requestUrl, headers, body) = buildRequest(prefs, allHistory, input, imageBase64)
                 // Add stream:true to body for OpenAI-compatible providers
-                if (effectivePrefs.apiProvider != "Anthropic" && effectivePrefs.apiProvider != "Google") {
+                if (prefs.apiProvider != "Anthropic" && prefs.apiProvider != "Google") {
                     body = addStreaming(body)
                 }
                 if (input.isNotBlank() || imageBase64.isNotBlank()) {
