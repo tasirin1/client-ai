@@ -1040,11 +1040,10 @@ private fun ModelSelectorBar(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        Icon(
         Text(
             "▼",
-            tint = Color(0xFF777777),
-            modifier = Modifier.size(20.dp),
+            color = Color(0xFF777777),
+            fontSize = 14.sp,
         )
         
         DropdownMenu(
