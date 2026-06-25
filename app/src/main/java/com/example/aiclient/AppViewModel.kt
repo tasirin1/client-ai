@@ -60,6 +60,7 @@ data class UiState(
     val errorLog: String = "",
     val streamingText: String = "",
     val availableProviders: List<Pair<String, List<String>>> = emptyList(),
+    val providersWithKeys: Set<String> = emptySet(),
 )
 private data class CoreUiState(
     val prefs: AppPrefs,
@@ -107,14 +108,16 @@ class AppViewModel(
     private val availableProvidersFlow: StateFlow<List<Pair<String, List<String>>>> = prefsFlow.map { prefs ->
         getAllProviderNames().mapNotNull { provider ->
             if (provider == "Custom") return@mapNotNull null
-            val config = getProviderConfig(prefs, provider)
-            if (config.apiKey.isNotBlank()) {
-                val models = getModelsForProvider(provider)
-                val custom = getCustomModels(prefs, provider)
-                provider to (models + custom)
-            } else null
+            val models = getModelsForProvider(provider)
+            val custom = getCustomModels(prefs, provider)
+            provider to (models + custom)
         }
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), emptyList())
+    private val providersWithKeysFlow: StateFlow<Set<String>> = prefsFlow.map { prefs ->
+        getAllProviderNames().filter { provider ->
+            provider != "Custom" && getProviderConfig(prefs, provider).apiKey.isNotBlank()
+        }.toSet()
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), emptySet())
     private val sessionPreviewsFlow = combine(
         sessionsFlow,
         lastMessagesFlow,
@@ -202,6 +205,7 @@ class AppViewModel(
             errorLog = core.errorLog,
             streamingText = core.streamingText,
             availableProviders = availableProvidersFlow.value,
+            providersWithKeys = providersWithKeysFlow.value,
         )
     }.stateIn(
         viewModelScope,

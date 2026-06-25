@@ -317,6 +317,7 @@ private fun MainScreen(
                     currentProvider = uiState.prefs.apiProvider,
                     currentModel = uiState.prefs.model,
                     onSelectModel = onSelectModel,
+                    providersWithKeys = uiState.providersWithKeys,
                 )
 
                 ComposerBar(
@@ -1015,6 +1016,7 @@ private fun ModelSelectorBar(
     currentProvider: String,
     currentModel: String,
     onSelectModel: (String, String) -> Unit,
+    providersWithKeys: Set<String>,
 ) {
     var expanded by remember { mutableStateOf(false) }
     
@@ -1076,12 +1078,15 @@ private fun ModelSelectorBar(
                     )
                     models.forEach { model ->
                         val isSelected = provider == currentProvider && model == currentModel
+                        val hasApiKey = provider in providersWithKeys
+                        val enabled = hasApiKey && !isSelected
                         DropdownMenuItem(
+                            enabled = enabled,
                             text = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = model,
-                                        color = if (isSelected) Color(0xFF7C5CFC) else Color(0xFFE8E8E8),
+                                        text = if (!hasApiKey) "$model  (butuh API Key)" else model,
+                                        color = if (isSelected) Color(0xFF7C5CFC) else if (!hasApiKey) Color(0xFF555555) else Color(0xFFE8E8E8),
                                         fontSize = 13.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
