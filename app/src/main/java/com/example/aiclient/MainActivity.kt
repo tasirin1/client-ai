@@ -1041,8 +1041,8 @@ private fun ModelSelectorBar(
             modifier = Modifier.weight(1f),
         )
         Icon(
-            Icons.Default.KeyboardArrowDown,
-            contentDescription = "Pilih model",
+        Text(
+            "▼",
             tint = Color(0xFF777777),
             modifier = Modifier.size(20.dp),
         )
@@ -1090,11 +1090,10 @@ private fun ModelSelectorBar(
                                     )
                                     if (isSelected) {
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Icon(
-                                            Icons.Default.Done,
-                                            contentDescription = "Terpilih",
-                                            tint = Color(0xFF7C5CFC),
-                                            modifier = Modifier.size(16.dp),
+                                        Text(
+                                            "✓",
+                                            color = Color(0xFF7C5CFC),
+                                            fontSize = 14.sp,
                                         )
                                     }
                                 }
